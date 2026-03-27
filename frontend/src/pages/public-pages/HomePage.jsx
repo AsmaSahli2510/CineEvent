@@ -1,8 +1,8 @@
 import React from "react";
-import EventCard from "../components/EventCard";
-import { events } from "../data/events";
-import heroImg from "../images/upscalemedia-transformed.png";
-import parisImg from "../images/Gemini_Generated_Image_8huwzw8huwzw8huw.png";
+import EventCard from "../../components/EventCard";
+import { events } from "../../data/events";
+import heroImg from "../../images/upscalemedia-transformed.png";
+import parisImg from "../../images/Gemini_Generated_Image_8huwzw8huwzw8huw.png";
 
 const popularEvents = events;
 

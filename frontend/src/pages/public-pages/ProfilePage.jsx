@@ -1,7 +1,7 @@
 import React from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { clearAuth } from "../store/slices/authSlice";
+import { clearAuth } from "../../store/slices/authSlice";
 
 const buildDefaultAvatar = (name) => {
   const encodedName = encodeURIComponent(name || "User");

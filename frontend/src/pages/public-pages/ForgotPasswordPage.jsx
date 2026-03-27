@@ -1,8 +1,8 @@
 import React from "react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import heroImg from "../images/upscalemedia-transformed.png";
-import { requestPasswordReset } from "../api/authApi";
+import heroImg from "../../images/upscalemedia-transformed.png";
+import { requestPasswordReset } from "../../api/authApi";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");

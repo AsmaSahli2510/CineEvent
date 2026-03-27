@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
-import { registerSpectator } from "../api/authApi";
-import { setCredentials } from "../store/slices/authSlice";
+import { registerSpectator } from "../../api/authApi";
+import { setCredentials } from "../../store/slices/authSlice";
 
 export default function SpectatorRegistrationPage() {
   const dispatch = useDispatch();

@@ -2,17 +2,28 @@ import React from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./components/MainLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
-import EventDetailsPage from "./pages/EventDetailsPage";
-import EventsPage from "./pages/EventsPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import GuestReservationPage from "./pages/GuestReservationPage";
-import HomePage from "./pages/HomePage";
-import LoginPage from "./pages/LoginPage";
-import NotFoundPage from "./pages/NotFoundPage";
-import OrganizerRegistrationPage from "./pages/OrganizerRegistrationPage";
-import ProfilePage from "./pages/ProfilePage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import SpectatorRegistrationPage from "./pages/SpectatorRegistrationPage";
+import EventDetailsPage from "./pages/public-pages/EventDetailsPage";
+import EventsPage from "./pages/public-pages/EventsPage";
+import ForgotPasswordPage from "./pages/public-pages/ForgotPasswordPage";
+import GuestReservationPage from "./pages/public-pages/GuestReservationPage";
+import HomePage from "./pages/public-pages/HomePage";
+import LoginPage from "./pages/public-pages/LoginPage";
+import NotFoundPage from "./pages/public-pages/NotFoundPage";
+import OrganizerRegistrationPage from "./pages/public-pages/OrganizerRegistrationPage";
+import ProfilePage from "./pages/public-pages/ProfilePage";
+import ResetPasswordPage from "./pages/public-pages/ResetPasswordPage";
+import SpectatorRegistrationPage from "./pages/public-pages/SpectatorRegistrationPage";
+import CreateRoomTemplatePage from "./pages/admin-pages/CreateRoomTemplatePage";
+import DonationsPage from "./pages/admin-pages/DonationsPage";
+import VenueTemplateManagementPage from "./pages/admin-pages/VenueTemplateManagementPage";
+import UserManagementPage from "./pages/admin-pages/UserManagementPage";
+import CommentModerationPage from "./pages/admin-pages/CommentModerationPage";
+import OrganizerWalletPage from "./pages/admin-pages/OrganizerWalletPage";
+import RevenuePage from "./pages/admin-pages/RevenuePage";
+import StatisticsPage from "./pages/admin-pages/StatisticsPage";
+import EventValidationPage from "./pages/admin-pages/EventValidationPage";
+import OrganizerValidationPage from "./pages/admin-pages/OrganizerValidationPage";
+import AdminDashboardPage from "./pages/admin-pages/AdminDashboardPage";
 
 export default function App() {
   return (
@@ -59,6 +70,38 @@ export default function App() {
         path="/events/:eventId/reserve"
         element={<GuestReservationPage />}
       />
+      <Route
+        path="/admin/create-room-template-preview"
+        element={<CreateRoomTemplatePage />}
+      />
+      <Route path="/admin/donations-preview" element={<DonationsPage />} />
+      <Route
+        path="/admin/venue-template-management-preview"
+        element={<VenueTemplateManagementPage />}
+      />
+      <Route
+        path="/admin/user-management-preview"
+        element={<UserManagementPage />}
+      />
+      <Route
+        path="/admin/comment-moderation-preview"
+        element={<CommentModerationPage />}
+      />
+      <Route
+        path="/admin/organizer-wallet-preview"
+        element={<OrganizerWalletPage />}
+      />
+      <Route path="/admin/revenue-preview" element={<RevenuePage />} />
+      <Route path="/admin/statistics-preview" element={<StatisticsPage />} />
+      <Route
+        path="/admin/event-validation-preview"
+        element={<EventValidationPage />}
+      />
+      <Route
+        path="/admin/organizer-validation-preview"
+        element={<OrganizerValidationPage />}
+      />
+      <Route path="/admin/dashboard-preview" element={<AdminDashboardPage />} />
     </Routes>
   );
 }

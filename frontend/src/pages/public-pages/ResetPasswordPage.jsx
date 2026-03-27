@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   resetPasswordWithToken,
   validatePasswordResetToken,
-} from "../api/authApi";
+} from "../../api/authApi";
 
 const getStrength = (password) => {
   let score = 0;

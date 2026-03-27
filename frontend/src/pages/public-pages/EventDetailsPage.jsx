@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useParams } from "react-router-dom";
-import { eventById } from "../data/events";
+import { eventById } from "../../data/events";
 
 export default function EventDetailsPage() {
   const { eventId } = useParams();
