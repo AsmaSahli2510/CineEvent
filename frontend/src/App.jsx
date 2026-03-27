@@ -11,6 +11,7 @@ import LoginPage from "./pages/LoginPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import OrganizerRegistrationPage from "./pages/OrganizerRegistrationPage";
 import ProfilePage from "./pages/ProfilePage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import SpectatorRegistrationPage from "./pages/SpectatorRegistrationPage";
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
       <Route path="/signup" element={<SpectatorRegistrationPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
       <Route
         path="/events/:eventId/reserve"
         element={<GuestReservationPage />}

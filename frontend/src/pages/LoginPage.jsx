@@ -8,6 +8,7 @@ import { setCredentials } from "../store/slices/authSlice";
 import { auth } from "../config/firebase";
 
 const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 export default function LoginPage() {
   const dispatch = useDispatch();
@@ -55,6 +56,14 @@ export default function LoginPage() {
         setError("Pop-up blocked. Please allow pop-ups for this site.");
       } else if (err.code === "auth/popup-closed-by-user") {
         setError("Sign-in cancelled.");
+      } else if (err.code === "auth/unauthorized-domain") {
+        setError(
+          "This domain is not allowed in Firebase Auth. Add your frontend domain to Authorized domains in Firebase console.",
+        );
+      } else if (err.code === "auth/operation-not-allowed") {
+        setError(
+          "Google sign-in is not enabled in Firebase. Enable Google provider in Firebase Authentication settings.",
+        );
       } else {
         setError(err.message || "Google sign-in failed. Please try again.");
       }

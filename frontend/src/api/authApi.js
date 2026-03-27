@@ -57,6 +57,56 @@ export const loginWithGoogle = async (idToken) => {
   return response.json();
 };
 
+export const requestPasswordReset = async (email) => {
+  const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to send password reset email");
+  }
+
+  return data;
+};
+
+export const validatePasswordResetToken = async (token) => {
+  const response = await fetch(`${API_BASE_URL}/auth/reset-password/${token}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Invalid reset link");
+  }
+
+  return data;
+};
+
+export const resetPasswordWithToken = async (token, password) => {
+  const response = await fetch(`${API_BASE_URL}/auth/reset-password/${token}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ password }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to reset password");
+  }
+
+  return data;
+};
+
 export const fetchCurrentProfile = async () => {
   const response = await fetch(`${API_BASE_URL}/auth/profile`, {
     method: "GET",

@@ -1,8 +1,34 @@
 import React from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import heroImg from "../images/upscalemedia-transformed.png";
+import { requestPasswordReset } from "../api/authApi";
 
 export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const result = await requestPasswordReset(email);
+      setMessage(
+        result.message ||
+          "If an account with that email exists, a reset link has been sent.",
+      );
+    } catch (err) {
+      setError(err.message || "Failed to send reset link.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div
       className="min-h-screen bg-charcoal p-4"
@@ -41,7 +67,19 @@ export default function ForgotPasswordPage() {
             </p>
           </div>
 
-          <form className="space-y-6">
+          {message && (
+            <div className="mb-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+              {message}
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <label
                 className="ml-1 block text-xs font-bold uppercase tracking-widest text-accent"
@@ -58,14 +96,17 @@ export default function ForgotPasswordPage() {
                   placeholder="e.g. julian@cinema-luxe.com"
                   required
                   type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
             </div>
 
             <button
-              className="w-full rounded-xl border border-accent/10 bg-primary py-4 text-sm font-bold tracking-widest text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-[0.98]"
-              type="submit">
-              SEND RESET LINK
+              className="w-full rounded-xl border border-accent/10 bg-primary py-4 text-sm font-bold tracking-widest text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+              type="submit"
+              disabled={loading}>
+              {loading ? "SENDING..." : "SEND RESET LINK"}
             </button>
           </form>
 

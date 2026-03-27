@@ -1,38 +1,56 @@
 const admin = require("firebase-admin");
-const path = require("path");
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBjvb4nQAe8xKqdBHf8asQrX55dienhTpg",
-  authDomain: "cineevent-1a246.firebaseapp.com",
-  projectId: "cineevent-1a246",
-  storageBucket: "cineevent-1a246.firebasestorage.app",
-  messagingSenderId: "20576254243",
-  appId: "1:20576254243:web:8f82a576490760c4e0b496",
-  measurementId: "G-5NSCZ3R6Z8",
+  projectId: process.env.FIREBASE_PROJECT_ID || "cineevent-1a246",
+};
+
+let firebaseReady = false;
+
+const buildServiceAccount = () => {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  }
+
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    const decoded = Buffer.from(
+      process.env.FIREBASE_SERVICE_ACCOUNT_BASE64,
+      "base64",
+    ).toString("utf8");
+    return JSON.parse(decoded);
+  }
+
+  return null;
 };
 
 const initFirebase = () => {
   try {
-    // Initialize Firebase Admin SDK
-    // If a service account key exists in environment, use it
-    // Otherwise, use Application Default Credentials or initialize without credentials for client-side token verification
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        projectId: firebaseConfig.projectId,
-      });
-    } else {
-      // For local development or when using default credentials
-      admin.initializeApp({
-        projectId: firebaseConfig.projectId,
-      });
+    if (admin.apps.length > 0) {
+      firebaseReady = true;
+      return;
     }
+
+    const serviceAccount = buildServiceAccount();
+    const options = serviceAccount
+      ? {
+          credential: admin.credential.cert(serviceAccount),
+          projectId: firebaseConfig.projectId,
+        }
+      : {
+          projectId: firebaseConfig.projectId,
+        };
+
+    admin.initializeApp(options);
+    firebaseReady = true;
     console.log("Firebase Admin SDK initialized successfully");
   } catch (error) {
     console.error("Error initializing Firebase:", error.message);
-    // Continue even if initialization fails - might use default credentials
+    firebaseReady = false;
   }
 };
 
-module.exports = { firebaseConfig, admin, initFirebase };
+module.exports = {
+  firebaseConfig,
+  admin,
+  initFirebase,
+  isFirebaseReady: () => firebaseReady,
+};
