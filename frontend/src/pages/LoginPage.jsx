@@ -1,9 +1,13 @@
 import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import heroImg from "../images/upscalemedia-transformed.png";
-import { loginWithEmail } from "../api/authApi";
+import { loginWithEmail, loginWithGoogle } from "../api/authApi";
 import { setCredentials } from "../store/slices/authSlice";
+import { auth } from "../config/firebase";
+
+const googleProvider = new GoogleAuthProvider();
 
 export default function LoginPage() {
   const dispatch = useDispatch();
@@ -11,6 +15,7 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
@@ -32,6 +37,29 @@ export default function LoginPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError("");
+
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const idToken = await result.user.getIdToken();
+      const response = await loginWithGoogle(idToken);
+      dispatch(setCredentials(response));
+      navigate("/events");
+    } catch (err) {
+      if (err.code === "auth/popup-blocked") {
+        setError("Pop-up blocked. Please allow pop-ups for this site.");
+      } else if (err.code === "auth/popup-closed-by-user") {
+        setError("Sign-in cancelled.");
+      } else {
+        setError(err.message || "Google sign-in failed. Please try again.");
+      }
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -169,7 +197,8 @@ export default function LoginPage() {
             <button
               className="group flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 py-3.5 font-bold text-white transition-all hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
               type="button"
-              disabled={loading}>
+              disabled={loading || googleLoading}
+              onClick={handleGoogleLogin}>
               <svg
                 className="h-5 w-5 transition-transform group-hover:scale-110"
                 viewBox="0 0 24 24">
@@ -190,7 +219,7 @@ export default function LoginPage() {
                   fill="#EA4335"
                 />
               </svg>
-              Continue with Google
+              {googleLoading ? "Signing in..." : "Continue with Google"}
             </button>
           </form>
 
