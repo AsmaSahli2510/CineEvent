@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CinEvent – Connexion</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 420px;
+      color: #fff;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .logo h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(to right, #f7971e, #ffd200);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logo p { color: #aaa; font-size: 0.9rem; margin-top: 4px; }
+    h2 { font-size: 1.4rem; margin-bottom: 24px; text-align: center; }
+    .form-group { margin-bottom: 18px; }
+    label { display: block; margin-bottom: 6px; font-size: 0.85rem; color: #ccc; }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #f7971e; }
+    .btn {
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn-primary {
+      background: linear-gradient(to right, #f7971e, #ffd200);
+      color: #111;
+      margin-bottom: 12px;
+    }
+    .btn-google {
+      background: #fff;
+      color: #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn-google img { width: 20px; height: 20px; }
+    .divider {
+      text-align: center;
+      margin: 16px 0;
+      color: #888;
+      font-size: 0.85rem;
+      position: relative;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 42%;
+      height: 1px;
+      background: rgba(255,255,255,0.15);
+    }
+    .divider::before { left: 0; }
+    .divider::after { right: 0; }
+    .footer-link {
+      text-align: center;
+      margin-top: 22px;
+      font-size: 0.88rem;
+      color: #aaa;
+    }
+    .footer-link a { color: #ffd200; text-decoration: none; }
+    .footer-link a:hover { text-decoration: underline; }
+    .alert {
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 0.88rem;
+      display: none;
+    }
+    .alert-error { background: rgba(255,80,80,0.2); border: 1px solid rgba(255,80,80,0.4); color: #ff8080; }
+    .alert-success { background: rgba(80,200,120,0.2); border: 1px solid rgba(80,200,120,0.4); color: #80ffaa; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <h1>🎬 CinEvent</h1>
+      <p>Votre plateforme cinéma</p>
+    </div>
+    <h2>Connexion</h2>
+
+    <div id="alert" class="alert"></div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="email">Adresse e-mail</label>
+        <input type="email" id="email" placeholder="exemple@email.com" required />
+      </div>
+      <div class="form-group">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" placeholder="••••••••" required />
+      </div>
+      <button type="submit" class="btn btn-primary" id="loginBtn">Se connecter</button>
+    </form>
+
+    <div class="divider">ou</div>
+
+    <button class="btn btn-google" id="googleBtn">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+      Continuer avec Google
+    </button>
+
+    <div class="footer-link">
+      Pas encore de compte ? <a href="register.html">S'inscrire</a>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    // Firebase client config is intentionally public. Enable Firebase App Check in production.
+    const firebaseConfig = {
+      apiKey: "AIzaSyBjvb4nQAe8xKqdBHf8asQrX55dienhTpg",
+      authDomain: "cineevent-1a246.firebaseapp.com",
+      projectId: "cineevent-1a246",
+      storageBucket: "cineevent-1a246.firebasestorage.app",
+      messagingSenderId: "20576254243",
+      appId: "1:20576254243:web:8f82a576490760c4e0b496",
+      measurementId: "G-5NSCZ3R6Z8"
+    };
+
+    const firebaseApp = initializeApp(firebaseConfig);
+    const auth = getAuth(firebaseApp);
+    const provider = new GoogleAuthProvider();
+
+    const API_BASE = '/api';
+
+    function showAlert(message, type = 'error') {
+      const el = document.getElementById('alert');
+      el.textContent = message;
+      el.className = `alert alert-${type}`;
+      el.style.display = 'block';
+    }
+
+    function hideAlert() {
+      document.getElementById('alert').style.display = 'none';
+    }
+
+    // Email/password login
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert();
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+      btn.textContent = 'Connexion…';
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Erreur de connexion');
+        localStorage.setItem('cinevent_token', data.token);
+        localStorage.setItem('cinevent_user', JSON.stringify(data));
+        showAlert('Connexion réussie ! Redirection…', 'success');
+        setTimeout(() => { window.location.href = '/'; }, 1200);
+      } catch (err) {
+        showAlert(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Se connecter';
+      }
+    });
+
+    // Google Sign-In
+    document.getElementById('googleBtn').addEventListener('click', async () => {
+      hideAlert();
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const idToken = await result.user.getIdToken();
+
+        const res = await fetch(`${API_BASE}/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Erreur Google Sign-In');
+        localStorage.setItem('cinevent_token', data.token);
+        localStorage.setItem('cinevent_user', JSON.stringify(data));
+        showAlert('Connexion Google réussie ! Redirection…', 'success');
+        setTimeout(() => { window.location.href = '/'; }, 1200);
+      } catch (err) {
+        showAlert(err.message);
+      }
+    });
+  </script>
+</body>
+</html>

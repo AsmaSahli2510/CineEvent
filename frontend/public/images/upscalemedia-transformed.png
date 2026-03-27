@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0%" stop-color="#1C1C1C"/>
+      <stop offset="100%" stop-color="#800020"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#g)"/>
+  <circle cx="1180" cy="220" r="130" fill="#F5C065" opacity="0.18"/>
+  <circle cx="420" cy="650" r="200" fill="#F5C065" opacity="0.1"/>
+  <text x="80" y="430" fill="#F5C065" font-size="64" font-family="Arial, sans-serif">Replace with your original</text>
+  <text x="80" y="510" fill="#ffffff" font-size="46" font-family="Arial, sans-serif">upscalemedia-transformed.png</text>
+</svg>
