@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 export default function CreateRoomTemplatePage() {
   return (
@@ -33,15 +34,15 @@ export default function CreateRoomTemplatePage() {
       <div className="room-template-page text-white overflow-hidden h-screen flex flex-col bg-background-dark">
         <header className="h-16 border-b border-white/10 bg-charcoal flex items-center justify-between px-6 z-20">
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
+            <Link className="flex items-center gap-2" to="/admin/dashboard">
               <span className="material-symbols-outlined text-accent">
                 movie_filter
               </span>
               <h1 className="text-sm font-black tracking-tighter uppercase whitespace-nowrap">
-                CINÉ<span className="text-accent">EVENT</span>{" "}
+                CINÉ<span className="text-accent">ADMIN</span>{" "}
                 <span className="text-white/40 ml-2 font-normal">| Editor</span>
               </h1>
-            </div>
+            </Link>
             <div className="h-6 w-px bg-white/10" />
             <div>
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
@@ -72,6 +73,11 @@ export default function CreateRoomTemplatePage() {
             <button className="px-5 py-2 bg-primary/20 border border-primary/40 text-accent rounded-lg text-xs font-bold hover:bg-primary transition-all">
               SAVE TEMPLATE
             </button>
+            <Link
+              className="px-5 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-xs font-black hover:bg-white/10 transition-all"
+              to="/admin/venues/templates">
+              CANCEL
+            </Link>
             <button className="px-5 py-2 bg-accent text-charcoal rounded-lg text-xs font-black hover:opacity-90 transition-all">
               PUBLISH
             </button>

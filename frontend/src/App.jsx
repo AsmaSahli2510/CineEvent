@@ -71,37 +71,101 @@ export default function App() {
         element={<GuestReservationPage />}
       />
       <Route
-        path="/admin/create-room-template-preview"
-        element={<CreateRoomTemplatePage />}
-      />
-      <Route path="/admin/donations-preview" element={<DonationsPage />} />
-      <Route
-        path="/admin/venue-template-management-preview"
-        element={<VenueTemplateManagementPage />}
-      />
-      <Route
-        path="/admin/user-management-preview"
-        element={<UserManagementPage />}
+        path="/admin"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <Navigate to="/admin/dashboard" replace />
+          </ProtectedRoute>
+        }
       />
       <Route
-        path="/admin/comment-moderation-preview"
-        element={<CommentModerationPage />}
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <AdminDashboardPage />
+          </ProtectedRoute>
+        }
       />
       <Route
-        path="/admin/organizer-wallet-preview"
-        element={<OrganizerWalletPage />}
-      />
-      <Route path="/admin/revenue-preview" element={<RevenuePage />} />
-      <Route path="/admin/statistics-preview" element={<StatisticsPage />} />
-      <Route
-        path="/admin/event-validation-preview"
-        element={<EventValidationPage />}
+        path="/admin/events/validation"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <EventValidationPage />
+          </ProtectedRoute>
+        }
       />
       <Route
-        path="/admin/organizer-validation-preview"
-        element={<OrganizerValidationPage />}
+        path="/admin/comments/moderation"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <CommentModerationPage />
+          </ProtectedRoute>
+        }
       />
-      <Route path="/admin/dashboard-preview" element={<AdminDashboardPage />} />
+      <Route
+        path="/admin/organizers/validation"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <OrganizerValidationPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <UserManagementPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/revenue"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <RevenuePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/donations"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <DonationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/organizers/wallet"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <OrganizerWalletPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/statistics"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <StatisticsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/venues/templates"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <VenueTemplateManagementPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/rooms/templates"
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <CreateRoomTemplatePage />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }

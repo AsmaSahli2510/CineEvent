@@ -33,7 +33,7 @@ export default function LoginPage() {
     try {
       const response = await loginWithEmail(formData.email, formData.password);
       dispatch(setCredentials(response));
-      navigate("/events");
+      navigate(response?.role === "admin" ? "/admin/dashboard" : "/events");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -50,7 +50,7 @@ export default function LoginPage() {
       const idToken = await result.user.getIdToken();
       const response = await loginWithGoogle(idToken);
       dispatch(setCredentials(response));
-      navigate("/events");
+      navigate(response?.role === "admin" ? "/admin/dashboard" : "/events");
     } catch (err) {
       if (err.code === "auth/popup-blocked") {
         setError("Pop-up blocked. Please allow pop-ups for this site.");

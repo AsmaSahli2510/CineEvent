@@ -62,6 +62,13 @@ export default function Navbar() {
             to="/experience">
             Experience
           </Link>
+          {currentUser?.role === "admin" && (
+            <Link
+              className="text-sm font-medium text-accent transition-colors hover:text-white"
+              to="/admin/dashboard">
+              Admin Dashboard
+            </Link>
+          )}
         </nav>
         <div className="flex items-center gap-4">
           {currentUser ? (
