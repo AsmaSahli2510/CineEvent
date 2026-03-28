@@ -1,22 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
 
 export default function OrganizerPendingValidationPage() {
-  const navigate = useNavigate();
-  const { currentUser } = useSelector((state) => state.auth);
-
-  // Redirect if not an organizer with pending status
-  if (
-    !currentUser ||
-    currentUser.role !== "organizer" ||
-    currentUser.organizerStatus !== "pending_validation"
-  ) {
-    navigate("/", { replace: true });
-    return null;
-  }
-
   return (
     <div className="min-h-screen bg-background-dark text-white">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 pt-8 md:px-10">
@@ -139,50 +124,12 @@ export default function OrganizerPendingValidationPage() {
                       Important: Check Your Email
                     </p>
                     <p>
-                      We sent a confirmation to{" "}
-                      <strong className="text-white">
-                        {currentUser?.email}
-                      </strong>
-                      . Please check your inbox and spam folder. Do not use the
-                      login page yet—wait for the approval email from our admin
-                      team.
+                      We sent a confirmation email to the address used during
+                      registration. Please check your inbox and spam folder. Do
+                      not use the login page yet, and wait for the approval
+                      email from our admin team.
                     </p>
                   </div>
-                </div>
-              </div>
-
-              {/* Organization Details Summary */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-white">
-                  Submitted Organization
-                </h3>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-                  <div>
-                    <p className="text-xs text-white/50 font-medium">
-                      Organization Name
-                    </p>
-                    <p className="text-sm text-white mt-1">
-                      {currentUser?.organizerProfile?.organizationName || "N/A"}
-                    </p>
-                  </div>
-                  <div className="border-t border-white/10 pt-3">
-                    <p className="text-xs text-white/50 font-medium">
-                      Representative
-                    </p>
-                    <p className="text-sm text-white mt-1">
-                      {currentUser?.name || "N/A"}
-                    </p>
-                  </div>
-                  {currentUser?.organizerProfile?.website && (
-                    <div className="border-t border-white/10 pt-3">
-                      <p className="text-xs text-white/50 font-medium">
-                        Website
-                      </p>
-                      <p className="text-sm text-accent mt-1 break-all">
-                        {currentUser.organizerProfile.website}
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -239,11 +186,11 @@ export default function OrganizerPendingValidationPage() {
 
               {/* Action Button */}
               <div className="flex flex-col gap-3 border-t border-white/10 pt-6">
-                <button
-                  onClick={() => navigate("/", { replace: true })}
-                  className="w-full rounded-xl border border-white/20 px-6 py-4 text-sm font-bold transition-colors hover:bg-white/5">
+                <Link
+                  to="/"
+                  className="w-full rounded-xl border border-white/20 px-6 py-4 text-center text-sm font-bold transition-colors hover:bg-white/5">
                   Back to Home
-                </button>
+                </Link>
                 <p className="text-center text-xs text-white/40">
                   Your organizer access will be enabled after admin approval.
                 </p>

@@ -1,11 +1,8 @@
 import React, { useState } from "react";
-import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { registerOrganizer } from "../../api/authApi";
-import { setCredentials } from "../../store/slices/authSlice";
 
 export default function OrganizerRegistrationPage() {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -122,7 +119,7 @@ export default function OrganizerRegistrationPage() {
     setError("");
 
     try {
-      const response = await registerOrganizer({
+      await registerOrganizer({
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -134,7 +131,6 @@ export default function OrganizerRegistrationPage() {
         legalDocuments: selectedFiles,
       });
 
-      dispatch(setCredentials(response));
       navigate("/organizer-pending-validation", { replace: true });
     } catch (err) {
       setError(err.message || "Organizer registration failed");

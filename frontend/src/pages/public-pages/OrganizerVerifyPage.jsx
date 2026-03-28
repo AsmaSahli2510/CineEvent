@@ -38,11 +38,6 @@ export default function OrganizerVerifyPage() {
         dispatch(setCredentials(data));
         setSuccess(true);
         setLoading(false);
-
-        // Redirect to organizer dashboard after 2 seconds
-        setTimeout(() => {
-          navigate("/organizer-dashboard", { replace: true });
-        }, 2000);
       } catch (err) {
         setError(err.message || "An error occurred during verification");
         setLoading(false);
@@ -146,20 +141,19 @@ export default function OrganizerVerifyPage() {
             <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl">
               <div className="p-8 md:p-12">
                 <div className="mb-6 rounded-lg border border-green-500/40 bg-green-500/15 p-4 text-sm text-green-200">
-                  Your email has been verified successfully!
+                  Your organizer account was validated successfully!
                 </div>
 
                 <p className="text-center text-white/70">
-                  Your organizer account is now active. Redirecting you to your
-                  dashboard...
+                  You can now access your organizer dashboard.
                 </p>
 
-                <div className="mt-8">
-                  <div className="flex justify-center">
-                    <div className="h-2 w-32 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full bg-accent animate-pulse" />
-                    </div>
-                  </div>
+                <div className="mt-8 border-t border-white/10 pt-6">
+                  <button
+                    onClick={() => navigate("/organizer-dashboard")}
+                    className="w-full rounded-xl bg-accent py-4 text-sm font-black text-charcoal transition-all hover:scale-[1.02] hover:bg-white">
+                    Go to Organizer Dashboard
+                  </button>
                 </div>
               </div>
             </div>

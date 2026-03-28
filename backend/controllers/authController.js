@@ -39,23 +39,48 @@ const normalizeChecklist = (rawChecklist) => {
 };
 
 const removeOrganizerUploadedFiles = (legalDocuments = []) => {
+  let deletedFilesCount = 0;
+
   legalDocuments.forEach((doc) => {
-    const url = doc?.url || "";
-    const filename = url.split("/").pop();
-    if (!filename) return;
+    const rawUrl = doc?.url || "";
+    const candidateNames = [];
 
-    const absolutePath = path.join(
-      __dirname,
-      "..",
-      "uploads",
-      "legal-docs",
-      filename,
-    );
+    // Support absolute URLs and plain relative paths saved in DB.
+    if (rawUrl) {
+      try {
+        const parsed = new URL(rawUrl);
+        const parsedName = path.basename(parsed.pathname || "");
+        if (parsedName) {
+          candidateNames.push(decodeURIComponent(parsedName));
+        }
+      } catch (_error) {
+        const fallbackName = path.basename(rawUrl.split("?")[0]);
+        if (fallbackName) {
+          candidateNames.push(decodeURIComponent(fallbackName));
+        }
+      }
+    }
 
-    if (fs.existsSync(absolutePath)) {
-      fs.unlinkSync(absolutePath);
+    // If different formats are present, try unique filenames in order.
+    const uniqueNames = [...new Set(candidateNames.filter(Boolean))];
+    for (const filename of uniqueNames) {
+      const absolutePath = path.join(
+        __dirname,
+        "..",
+        "uploads",
+        "legal-docs",
+        filename,
+      );
+
+      if (fs.existsSync(absolutePath)) {
+        fs.unlinkSync(absolutePath);
+        deletedFilesCount += 1;
+        break;
+      }
     }
   });
+
+  return deletedFilesCount;
 };
 
 const buildAuthResponse = (user) => ({
@@ -67,6 +92,15 @@ const buildAuthResponse = (user) => ({
   organizerStatus: user.organizerStatus,
   organizerProfile: user.organizerProfile,
   token: generateToken(user._id),
+});
+
+const buildPendingOrganizerResponse = (user) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  organizerStatus: user.organizerStatus,
+  organizerProfile: user.organizerProfile,
 });
 
 // @desc    Register a new spectator
@@ -564,12 +598,15 @@ const rejectOrganizerAndSendEmail = async (req, res) => {
       internalNote: (internalNote || "").trim(),
     });
 
-    removeOrganizerUploadedFiles(user.organizerProfile?.legalDocuments || []);
+    const deletedFilesCount = removeOrganizerUploadedFiles(
+      user.organizerProfile?.legalDocuments || [],
+    );
     await User.deleteOne({ _id: user._id });
 
     res.json({
       message:
         "Organizer rejected, email sent, and account deleted successfully",
+      deletedFilesCount,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -605,10 +642,8 @@ const loginViaOrganizerApprovalLink = async (req, res) => {
       });
     }
 
-    // Clear the approval token after successful verification
-    user.organizerApprovalToken = null;
-    user.organizerApprovalTokenExpires = null;
-    await user.save();
+    // Keep token valid until expiry so repeated link hits (e.g. retries/dev double requests) still succeed.
+    // Organizer access remains controlled by organizerStatus and token expiry.
 
     res.json(buildAuthResponse(user));
   } catch (error) {

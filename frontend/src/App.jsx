@@ -27,6 +27,7 @@ import StatisticsPage from "./pages/admin-pages/StatisticsPage";
 import EventValidationPage from "./pages/admin-pages/EventValidationPage";
 import OrganizerValidationPage from "./pages/admin-pages/OrganizerValidationPage";
 import AdminDashboardPage from "./pages/admin-pages/AdminDashboardPage";
+import OrganizerDashboardPage from "./pages/organizer-pages/OrganizerDashboardPage";
 
 export default function App() {
   return (
@@ -87,11 +88,7 @@ export default function App() {
       />
       <Route
         path="/organizer-pending-validation"
-        element={
-          <ProtectedRoute allowPendingOrganizer>
-            <OrganizerPendingValidationPage />
-          </ProtectedRoute>
-        }
+        element={<OrganizerPendingValidationPage />}
       />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
@@ -102,6 +99,14 @@ export default function App() {
       <Route
         path="/events/:eventId/reserve"
         element={<GuestReservationPage />}
+      />
+      <Route
+        path="/organizer-dashboard"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <OrganizerDashboardPage />
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/admin"

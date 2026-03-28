@@ -13,6 +13,10 @@ export default function PublicRoute({ children }) {
       return <Navigate to="/organizer-pending-validation" replace />;
     }
 
+    if (currentUser.role === "admin") {
+      return <Navigate to="/admin/dashboard" replace />;
+    }
+
     return <Navigate to="/" replace />;
   }
 
