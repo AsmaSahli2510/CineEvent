@@ -47,6 +47,7 @@ app.use("/api/auth/forgot-password", authLimiter);
 app.use("/api/auth/reset-password", authLimiter);
 
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.get("/api", (req, res) => {
   res.json({ message: "CinEvent API is running" });

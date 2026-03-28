@@ -14,6 +14,8 @@ import OrganizerRegistrationPage from "./pages/public-pages/OrganizerRegistratio
 import ProfilePage from "./pages/public-pages/ProfilePage";
 import ResetPasswordPage from "./pages/public-pages/ResetPasswordPage";
 import SpectatorRegistrationPage from "./pages/public-pages/SpectatorRegistrationPage";
+import OrganizerPendingValidationPage from "./pages/public-pages/OrganizerPendingValidationPage";
+import OrganizerVerifyPage from "./pages/public-pages/OrganizerVerifyPage";
 import CreateRoomTemplatePage from "./pages/admin-pages/CreateRoomTemplatePage";
 import DonationsPage from "./pages/admin-pages/DonationsPage";
 import VenueTemplateManagementPage from "./pages/admin-pages/VenueTemplateManagementPage";
@@ -50,7 +52,11 @@ export default function App() {
         />
         <Route
           path="/organizer-registration"
-          element={<OrganizerRegistrationPage />}
+          element={
+            <PublicRoute>
+              <OrganizerRegistrationPage />
+            </PublicRoute>
+          }
         />
         <Route
           path="/profile"
@@ -79,8 +85,20 @@ export default function App() {
           </PublicRoute>
         }
       />
+      <Route
+        path="/organizer-pending-validation"
+        element={
+          <ProtectedRoute allowPendingOrganizer>
+            <OrganizerPendingValidationPage />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+      <Route
+        path="/organizer-verify/:token"
+        element={<OrganizerVerifyPage />}
+      />
       <Route
         path="/events/:eventId/reserve"
         element={<GuestReservationPage />}

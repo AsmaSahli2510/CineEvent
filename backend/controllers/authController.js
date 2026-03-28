@@ -2,7 +2,72 @@ const User = require("../models/User");
 const { generateToken } = require("../utils/helpers");
 const { admin, isFirebaseReady } = require("../config/firebase");
 const crypto = require("crypto");
-const { sendPasswordResetEmail } = require("../utils/email");
+const fs = require("fs");
+const path = require("path");
+const {
+  sendPasswordResetEmail,
+  sendOrganizerApprovalEmail,
+  sendOrganizerRejectionEmail,
+} = require("../utils/email");
+
+const ORGANIZER_CHECKLIST_DEFINITIONS = [
+  {
+    key: "businessRegistrationValid",
+    label: "Business registration document is clear and valid",
+  },
+  {
+    key: "representativeIdMatches",
+    label: "Representative identity document matches account details",
+  },
+  {
+    key: "ibanVerified",
+    label: "IBAN is valid and ownership information is consistent",
+  },
+  {
+    key: "profileInformationComplete",
+    label: "Organization profile information is complete and coherent",
+  },
+];
+
+const normalizeChecklist = (rawChecklist) => {
+  const checklistObject =
+    rawChecklist && typeof rawChecklist === "object" ? rawChecklist : {};
+  return ORGANIZER_CHECKLIST_DEFINITIONS.map((item) => ({
+    ...item,
+    passed: checklistObject[item.key] === true,
+  }));
+};
+
+const removeOrganizerUploadedFiles = (legalDocuments = []) => {
+  legalDocuments.forEach((doc) => {
+    const url = doc?.url || "";
+    const filename = url.split("/").pop();
+    if (!filename) return;
+
+    const absolutePath = path.join(
+      __dirname,
+      "..",
+      "uploads",
+      "legal-docs",
+      filename,
+    );
+
+    if (fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+    }
+  });
+};
+
+const buildAuthResponse = (user) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  avatar: user.avatar,
+  organizerStatus: user.organizerStatus,
+  organizerProfile: user.organizerProfile,
+  token: generateToken(user._id),
+});
 
 // @desc    Register a new spectator
 // @route   POST /api/auth/register
@@ -30,20 +95,78 @@ const register = async (req, res) => {
       authProvider: "local",
     });
 
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      avatar: user.avatar,
-      token: generateToken(user._id),
-    });
+    res.status(201).json(buildAuthResponse(user));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Login user (spectator or admin)
+// @desc    Register a new organizer (pending validation)
+// @route   POST /api/auth/register-organizer
+// @access  Public
+const registerOrganizer = async (req, res) => {
+  try {
+    const legalDocuments = (req.files || []).map((file) => ({
+      name: file.originalname,
+      url: `${req.protocol}://${req.get("host")}/uploads/legal-docs/${file.filename}`,
+      mimeType: file.mimetype,
+      size: file.size,
+    }));
+
+    const {
+      name,
+      email,
+      password,
+      organizationName,
+      website,
+      shortBio,
+      iban,
+      legalDocumentName,
+    } = req.body;
+
+    if (!name || !email || !password || !organizationName || !iban) {
+      return res.status(400).json({
+        message:
+          "Please provide name, email, password, organization name and IBAN",
+      });
+    }
+
+    if (legalDocuments.length === 0) {
+      return res.status(400).json({
+        message: "Please upload at least one legal document",
+      });
+    }
+
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: "organizer",
+      organizerStatus: "pending_validation",
+      organizerProfile: {
+        organizationName,
+        website: website || "",
+        shortBio: shortBio || "",
+        iban,
+        legalDocumentName:
+          legalDocumentName || legalDocuments.map((doc) => doc.name).join(", "),
+        legalDocuments,
+      },
+      authProvider: "local",
+    });
+
+    res.status(201).json(buildAuthResponse(user));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Login user (spectator, organizer or admin)
 // @route   POST /api/auth/login
 // @access  Public
 const login = async (req, res) => {
@@ -73,14 +196,17 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      avatar: user.avatar,
-      token: generateToken(user._id),
-    });
+    if (
+      user.role === "organizer" &&
+      user.organizerStatus === "pending_validation"
+    ) {
+      return res.status(403).json({
+        message:
+          "Your organizer application is under admin review. Please wait for the approval email with your access link.",
+      });
+    }
+
+    res.json(buildAuthResponse(user));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -143,14 +269,7 @@ const googleAuth = async (req, res) => {
       });
     }
 
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      avatar: user.avatar,
-      token: generateToken(user._id),
-    });
+    res.json(buildAuthResponse(user));
   } catch (error) {
     if (error.code && error.code.startsWith("auth/")) {
       return res
@@ -193,14 +312,7 @@ const updateProfile = async (req, res) => {
     }
 
     const updatedUser = await user.save();
-    res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      role: updatedUser.role,
-      avatar: updatedUser.avatar,
-      token: generateToken(updatedUser._id),
-    });
+    res.json(buildAuthResponse(updatedUser));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -329,8 +441,184 @@ const resetPassword = async (req, res) => {
   }
 };
 
+// @desc    Get pending organizers for admin validation queue
+// @route   GET /api/auth/admin/pending-organizers
+// @access  Private (Admin only)
+const getPendingOrganizers = async (req, res) => {
+  try {
+    const organizers = await User.find({
+      role: "organizer",
+      organizerStatus: "pending_validation",
+    })
+      .sort({ createdAt: -1 })
+      .select("name email organizerStatus organizerProfile createdAt");
+
+    res.json({ organizers });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Approve organizer and send approval email with verification link
+// @route   POST /api/auth/admin/approve-organizer/:organizerId
+// @access  Private (Admin only)
+const approveOrganizerAndSendEmail = async (req, res) => {
+  try {
+    const { organizerId } = req.params;
+    const { checklist, internalNote } = req.body;
+
+    const normalizedChecklist = normalizeChecklist(checklist);
+    const missingItems = normalizedChecklist
+      .filter((item) => !item.passed)
+      .map((item) => item.label);
+
+    if (missingItems.length > 0) {
+      return res.status(400).json({
+        message: "All checklist items must be validated before approval",
+        missingItems,
+      });
+    }
+
+    const user = await User.findById(organizerId).select(
+      "+organizerApprovalToken +organizerApprovalTokenExpires",
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "Organizer not found" });
+    }
+
+    if (user.role !== "organizer") {
+      return res.status(400).json({ message: "User is not an organizer" });
+    }
+
+    // Generate approval token (24 hours validity)
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    user.organizerStatus = "approved";
+    user.organizerApprovalToken = hashedToken;
+    user.organizerApprovalTokenExpires = new Date(
+      Date.now() + 24 * 60 * 60 * 1000,
+    );
+    await user.save();
+
+    // Send approval email with verification link
+    const frontendBase = process.env.FRONTEND_URL || "http://localhost:5174";
+    const dashboardUrl = `${frontendBase.replace(/\/$/, "")}/organizer-verify/${rawToken}`;
+
+    await sendOrganizerApprovalEmail({
+      to: user.email,
+      name: user.name,
+      dashboardUrl,
+      organizationName: user.organizerProfile.organizationName,
+      internalNote: (internalNote || "").trim(),
+      checklist: normalizedChecklist.map((item) => item.label),
+    });
+
+    res.json({
+      message: "Organizer approved and email sent successfully",
+      organizer: buildAuthResponse(user),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Reject organizer, send rejection email, and delete organizer data
+// @route   POST /api/auth/admin/reject-organizer/:organizerId
+// @access  Private (Admin only)
+const rejectOrganizerAndSendEmail = async (req, res) => {
+  try {
+    const { organizerId } = req.params;
+    const { checklist, internalNote } = req.body;
+
+    const normalizedChecklist = normalizeChecklist(checklist);
+    const missingItems = normalizedChecklist
+      .filter((item) => !item.passed)
+      .map((item) => item.label);
+
+    if (missingItems.length === 0) {
+      return res.status(400).json({
+        message:
+          "At least one missing checklist item is required for rejection",
+      });
+    }
+
+    const user = await User.findById(organizerId);
+    if (!user) {
+      return res.status(404).json({ message: "Organizer not found" });
+    }
+
+    if (user.role !== "organizer") {
+      return res.status(400).json({ message: "User is not an organizer" });
+    }
+
+    await sendOrganizerRejectionEmail({
+      to: user.email,
+      name: user.name,
+      organizationName: user.organizerProfile?.organizationName || "Organizer",
+      missingItems,
+      internalNote: (internalNote || "").trim(),
+    });
+
+    removeOrganizerUploadedFiles(user.organizerProfile?.legalDocuments || []);
+    await User.deleteOne({ _id: user._id });
+
+    res.json({
+      message:
+        "Organizer rejected, email sent, and account deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Login organizer via approval verification link
+// @route   GET /api/auth/organizer-verify/:token
+// @access  Public
+const loginViaOrganizerApprovalLink = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res
+        .status(400)
+        .json({ message: "Verification token is required" });
+    }
+
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+    const user = await User.findOne({
+      organizerApprovalToken: hashedToken,
+      organizerApprovalTokenExpires: { $gt: new Date() },
+      role: "organizer",
+      organizerStatus: "approved",
+    }).select("+organizerApprovalToken +organizerApprovalTokenExpires");
+
+    if (!user) {
+      return res.status(400).json({
+        message:
+          "Verification link is invalid, expired, or organizer not approved",
+      });
+    }
+
+    // Clear the approval token after successful verification
+    user.organizerApprovalToken = null;
+    user.organizerApprovalTokenExpires = null;
+    await user.save();
+
+    res.json(buildAuthResponse(user));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   register,
+  registerOrganizer,
   login,
   googleAuth,
   forgotPassword,
@@ -338,4 +626,8 @@ module.exports = {
   resetPassword,
   getProfile,
   updateProfile,
+  getPendingOrganizers,
+  approveOrganizerAndSendEmail,
+  rejectOrganizerAndSendEmail,
+  loginViaOrganizerApprovalLink,
 };

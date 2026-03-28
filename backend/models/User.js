@@ -22,8 +22,63 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["spectator", "admin"],
+      enum: ["spectator", "organizer", "admin"],
       default: "spectator",
+    },
+    organizerStatus: {
+      type: String,
+      enum: ["none", "pending_validation", "approved", "rejected"],
+      default: "none",
+    },
+    organizerProfile: {
+      organizationName: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      website: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      shortBio: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      iban: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      legalDocumentName: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      legalDocuments: [
+        {
+          name: {
+            type: String,
+            default: "",
+            trim: true,
+          },
+          url: {
+            type: String,
+            default: "",
+            trim: true,
+          },
+          mimeType: {
+            type: String,
+            default: "",
+            trim: true,
+          },
+          size: {
+            type: Number,
+            default: 0,
+          },
+        },
+      ],
     },
     avatar: {
       type: String,
@@ -44,6 +99,16 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
     passwordResetExpires: {
+      type: Date,
+      default: null,
+      select: false,
+    },
+    organizerApprovalToken: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    organizerApprovalTokenExpires: {
       type: Date,
       default: null,
       select: false,

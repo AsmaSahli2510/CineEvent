@@ -21,6 +21,45 @@ export const registerSpectator = async (name, email, password) => {
   return response.json();
 };
 
+// Register a new organizer
+export const registerOrganizer = async ({
+  name,
+  email,
+  password,
+  organizationName,
+  website,
+  shortBio,
+  iban,
+  legalDocumentName,
+  legalDocuments,
+}) => {
+  const formData = new FormData();
+  formData.append("name", name);
+  formData.append("email", email);
+  formData.append("password", password);
+  formData.append("organizationName", organizationName);
+  formData.append("website", website || "");
+  formData.append("shortBio", shortBio || "");
+  formData.append("iban", iban);
+  formData.append("legalDocumentName", legalDocumentName || "");
+
+  (legalDocuments || []).forEach((file) => {
+    formData.append("legalDocuments", file);
+  });
+
+  const response = await fetch(`${API_BASE_URL}/auth/register-organizer`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Organizer registration failed");
+  }
+
+  return response.json();
+};
+
 // Login with email and password
 export const loginWithEmail = async (email, password) => {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -122,6 +161,74 @@ export const fetchCurrentProfile = async () => {
   }
 
   return response.json();
+};
+
+export const getPendingOrganizersAdmin = async () => {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/admin/pending-organizers`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+    },
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to fetch pending organizers");
+  }
+
+  return data.organizers || [];
+};
+
+export const approveOrganizerAdmin = async (
+  organizerId,
+  { checklist, internalNote } = {},
+) => {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/admin/approve-organizer/${organizerId}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify({ checklist, internalNote }),
+    },
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to approve organizer");
+  }
+
+  return data;
+};
+
+export const rejectOrganizerAdmin = async (
+  organizerId,
+  { checklist, internalNote } = {},
+) => {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/admin/reject-organizer/${organizerId}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify({ checklist, internalNote }),
+    },
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to reject organizer");
+  }
+
+  return data;
 };
 
 // Save token to localStorage

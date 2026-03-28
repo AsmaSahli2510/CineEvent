@@ -14,8 +14,14 @@ export default function Navbar() {
   const navigate = useNavigate();
   const [showMenu, setShowMenu] = useState(false);
 
+  const isPendingOrganizer =
+    currentUser?.role === "organizer" &&
+    currentUser?.organizerStatus === "pending_validation";
+
+  const effectiveUser = isPendingOrganizer ? null : currentUser;
+
   const avatarSrc =
-    currentUser?.avatar || buildDefaultAvatar(currentUser?.name);
+    effectiveUser?.avatar || buildDefaultAvatar(effectiveUser?.name);
 
   const handleLogout = () => {
     dispatch(clearAuth());
@@ -62,7 +68,7 @@ export default function Navbar() {
             to="/experience">
             Experience
           </Link>
-          {currentUser?.role === "admin" && (
+          {effectiveUser?.role === "admin" && (
             <Link
               className="text-sm font-medium text-accent transition-colors hover:text-white"
               to="/admin/dashboard">
@@ -71,7 +77,7 @@ export default function Navbar() {
           )}
         </nav>
         <div className="flex items-center gap-4">
-          {currentUser ? (
+          {effectiveUser ? (
             <div className="relative">
               <button
                 className="flex items-center gap-2 rounded-full border border-accent/30 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-white/10"
@@ -81,12 +87,12 @@ export default function Navbar() {
                   className="h-8 w-8 rounded-full border border-accent/40 object-cover"
                   src={avatarSrc}
                 />
-                <span className="hidden md:inline">{currentUser.name}</span>
+                <span className="hidden md:inline">{effectiveUser.name}</span>
               </button>
               {showMenu && (
                 <div className="absolute right-0 top-full mt-2 w-48 rounded-lg bg-background-dark border border-accent/30 shadow-lg">
                   <div className="p-3 border-b border-accent/20 text-sm text-white/60">
-                    {currentUser.email}
+                    {effectiveUser.email}
                   </div>
                   <button
                     className="w-full px-4 py-2 text-left text-sm font-medium text-white hover:bg-white/10 transition-colors"

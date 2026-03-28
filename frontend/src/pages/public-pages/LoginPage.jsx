@@ -32,6 +32,19 @@ export default function LoginPage() {
 
     try {
       const response = await loginWithEmail(formData.email, formData.password);
+
+      // Check if organizer is pending validation
+      if (
+        response?.role === "organizer" &&
+        response?.organizerStatus === "pending_validation"
+      ) {
+        setError(
+          "Your organizer account is pending admin approval. You'll receive an email with a special login link once approved. Please wait for our admin team's confirmation.",
+        );
+        setLoading(false);
+        return;
+      }
+
       dispatch(setCredentials(response));
       navigate(response?.role === "admin" ? "/admin/dashboard" : "/events");
     } catch (err) {
