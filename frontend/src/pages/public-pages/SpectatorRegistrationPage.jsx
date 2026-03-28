@@ -340,7 +340,7 @@ export default function SpectatorRegistrationPage() {
                     </label>
                     <div className="group relative">
                       <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/40 transition-colors group-focus-within:text-accent">
-                        lock_check
+                        lock
                       </span>
                       <input
                         className="w-full rounded-xl border border-white/10 bg-[#252525] py-4 pl-12 pr-12 text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent"

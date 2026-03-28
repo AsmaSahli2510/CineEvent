@@ -1,4 +1,5 @@
 import React from "react";
+import { useSelector } from "react-redux";
 import EventCard from "../../components/EventCard";
 import { events } from "../../data/events";
 import heroImg from "../../images/upscalemedia-transformed.png";
@@ -7,6 +8,9 @@ import parisImg from "../../images/Gemini_Generated_Image_8huwzw8huwzw8huw.png";
 const popularEvents = events;
 
 export default function HomePage() {
+  const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
+  const showJoinCards = !(isAuthenticated && currentUser);
+
   return (
     <>
       <main className="w-full">
@@ -108,61 +112,63 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1440px] px-6 pb-24 md:px-20">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-            <div className="group relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-xl p-10">
-              <div
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                data-alt="Satisfied audience in a luxury cinema theater"
-                style={{
-                  backgroundImage: `url(${heroImg})`,
-                }}
-              />
-              <div className="absolute inset-0 bg-primary/40 transition-colors group-hover:bg-primary/50" />
-              <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-transparent to-transparent" />
-              <div className="relative z-10">
-                <h4 className="mb-3 text-3xl font-black text-white">
-                  Join as Spectator
-                </h4>
-                <p className="mb-6 max-w-sm text-white/80">
-                  Access exclusive invites, member-only screenings, and premium
-                  cinematic perks.
-                </p>
-                <a
-                  className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 font-bold text-primary transition-all hover:bg-accent hover:text-charcoal"
-                  href="/signup">
-                  Get Started
-                </a>
+        {showJoinCards && (
+          <section className="mx-auto max-w-[1440px] px-6 pb-24 md:px-20">
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              <div className="group relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-xl p-10">
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
+                  data-alt="Satisfied audience in a luxury cinema theater"
+                  style={{
+                    backgroundImage: `url(${heroImg})`,
+                  }}
+                />
+                <div className="absolute inset-0 bg-primary/40 transition-colors group-hover:bg-primary/50" />
+                <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-transparent to-transparent" />
+                <div className="relative z-10">
+                  <h4 className="mb-3 text-3xl font-black text-white">
+                    Join as Spectator
+                  </h4>
+                  <p className="mb-6 max-w-sm text-white/80">
+                    Access exclusive invites, member-only screenings, and
+                    premium cinematic perks.
+                  </p>
+                  <a
+                    className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 font-bold text-primary transition-all hover:bg-accent hover:text-charcoal"
+                    href="/signup">
+                    Get Started
+                  </a>
+                </div>
               </div>
-            </div>
 
-            <div className="group relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-xl p-10">
-              <div
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                data-alt="Event organizer planning a film set event"
-                style={{
-                  backgroundImage: `url(${parisImg})`,
-                }}
-              />
-              <div className="absolute inset-0 bg-charcoal/60 transition-colors group-hover:bg-charcoal/70" />
-              <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent" />
-              <div className="relative z-10">
-                <h4 className="mb-3 text-3xl font-black text-white">
-                  Join as Organizer
-                </h4>
-                <p className="mb-6 max-w-sm text-white/80">
-                  Host your own film festival or private screening. We provide
-                  the platform and the prestige.
-                </p>
-                <a
-                  className="inline-flex items-center justify-center rounded-full bg-accent px-8 py-3 font-bold text-charcoal transition-all hover:bg-white"
-                  href="/organizer-registration">
-                  Host an Event
-                </a>
+              <div className="group relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-xl p-10">
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
+                  data-alt="Event organizer planning a film set event"
+                  style={{
+                    backgroundImage: `url(${parisImg})`,
+                  }}
+                />
+                <div className="absolute inset-0 bg-charcoal/60 transition-colors group-hover:bg-charcoal/70" />
+                <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent" />
+                <div className="relative z-10">
+                  <h4 className="mb-3 text-3xl font-black text-white">
+                    Join as Organizer
+                  </h4>
+                  <p className="mb-6 max-w-sm text-white/80">
+                    Host your own film festival or private screening. We provide
+                    the platform and the prestige.
+                  </p>
+                  <a
+                    className="inline-flex items-center justify-center rounded-full bg-accent px-8 py-3 font-bold text-charcoal transition-all hover:bg-white"
+                    href="/organizer-registration">
+                    Host an Event
+                  </a>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
       </main>
     </>
   );

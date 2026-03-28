@@ -1,6 +1,7 @@
 import React from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./components/MainLayout";
+import PublicRoute from "./components/PublicRoute";
 import ProtectedRoute from "./components/ProtectedRoute";
 import EventDetailsPage from "./pages/public-pages/EventDetailsPage";
 import EventsPage from "./pages/public-pages/EventsPage";
@@ -62,8 +63,22 @@ export default function App() {
 
         <Route path="*" element={<NotFoundPage />} />
       </Route>
-      <Route path="/signup" element={<SpectatorRegistrationPage />} />
-      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/signup"
+        element={
+          <PublicRoute>
+            <SpectatorRegistrationPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/login"
+        element={
+          <PublicRoute>
+            <LoginPage />
+          </PublicRoute>
+        }
+      />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
       <Route
