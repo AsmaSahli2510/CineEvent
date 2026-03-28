@@ -35,22 +35,8 @@ export default function App() {
       <Route element={<MainLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
-        <Route
-          path="/events"
-          element={
-            <ProtectedRoute>
-              <EventsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/events/:eventId"
-          element={
-            <ProtectedRoute>
-              <EventDetailsPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/events" element={<EventsPage />} />
+        <Route path="/events/:eventId" element={<EventDetailsPage />} />
         <Route
           path="/organizer-registration"
           element={
@@ -59,14 +45,7 @@ export default function App() {
             </PublicRoute>
           }
         />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/profile" element={<ProfilePage />} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Route>
