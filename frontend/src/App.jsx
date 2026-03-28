@@ -28,6 +28,15 @@ import EventValidationPage from "./pages/admin-pages/EventValidationPage";
 import OrganizerValidationPage from "./pages/admin-pages/OrganizerValidationPage";
 import AdminDashboardPage from "./pages/admin-pages/AdminDashboardPage";
 import OrganizerDashboardPage from "./pages/organizer-pages/OrganizerDashboardPage";
+import CreateEventPage from "./pages/organizer-pages/CreateEventPage";
+import CreateCharityEventPage from "./pages/organizer-pages/CreateCharityEventPage";
+import EventStatisticsPage from "./pages/organizer-pages/EventStatisticsPage";
+import CommentResponsesPage from "./pages/organizer-pages/CommentResponsesPage";
+import DonationsTrackingPage from "./pages/organizer-pages/DonationsTrackingPage";
+import ManageEventsPage from "./pages/organizer-pages/ManageEventsPage";
+import MyEventsListPage from "./pages/organizer-pages/MyEventsListPage";
+import ReservationsListPage from "./pages/organizer-pages/ReservationsListPage";
+import RevenueTrackingPage from "./pages/organizer-pages/RevenueTrackingPage";
 
 export default function App() {
   return (
@@ -80,10 +89,98 @@ export default function App() {
         element={<GuestReservationPage />}
       />
       <Route
-        path="/organizer-dashboard"
+        path="/organizer"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <Navigate to="/organizer/dashboard" replace />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/dashboard"
         element={
           <ProtectedRoute requiredRole="organizer">
             <OrganizerDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/events/create"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <CreateEventPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/events/create-charity"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <CreateCharityEventPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/events/statistics"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <EventStatisticsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/comments/responses"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <CommentResponsesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/donations/tracking"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <DonationsTrackingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/events/manage"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <ManageEventsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/events/my-list"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <MyEventsListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/reservations"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <ReservationsListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer/revenue/tracking"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <RevenueTrackingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/organizer-dashboard"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <Navigate to="/organizer/dashboard" replace />
           </ProtectedRoute>
         }
       />

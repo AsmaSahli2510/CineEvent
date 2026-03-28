@@ -150,7 +150,7 @@ export default function OrganizerVerifyPage() {
 
                 <div className="mt-8 border-t border-white/10 pt-6">
                   <button
-                    onClick={() => navigate("/organizer-dashboard")}
+                    onClick={() => navigate("/organizer/dashboard")}
                     className="w-full rounded-xl bg-accent py-4 text-sm font-black text-charcoal transition-all hover:scale-[1.02] hover:bg-white">
                     Go to Organizer Dashboard
                   </button>

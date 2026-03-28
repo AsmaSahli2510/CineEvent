@@ -46,7 +46,13 @@ export default function LoginPage() {
       }
 
       dispatch(setCredentials(response));
-      navigate(response?.role === "admin" ? "/admin/dashboard" : "/events");
+      if (response?.role === "admin") {
+        navigate("/admin/dashboard");
+      } else if (response?.role === "organizer") {
+        navigate("/organizer/dashboard");
+      } else {
+        navigate("/events");
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -63,7 +69,13 @@ export default function LoginPage() {
       const idToken = await result.user.getIdToken();
       const response = await loginWithGoogle(idToken);
       dispatch(setCredentials(response));
-      navigate(response?.role === "admin" ? "/admin/dashboard" : "/events");
+      if (response?.role === "admin") {
+        navigate("/admin/dashboard");
+      } else if (response?.role === "organizer") {
+        navigate("/organizer/dashboard");
+      } else {
+        navigate("/events");
+      }
     } catch (err) {
       if (err.code === "auth/popup-blocked") {
         setError("Pop-up blocked. Please allow pop-ups for this site.");

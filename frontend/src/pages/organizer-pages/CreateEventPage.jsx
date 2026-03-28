@@ -1,0 +1,1225 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
+import OrganizerPageFrame from "../../components/organizer/OrganizerPageFrame";
+
+const STEPS = [
+  {
+    id: 1,
+    title: "Movie Information",
+    subtitle: "Core details and poster",
+  },
+  {
+    id: 2,
+    title: "Venue and Date",
+    subtitle: "Venue selection and screening",
+  },
+  {
+    id: 3,
+    title: "Pricing",
+    subtitle: "Ticketing, charity, and fees",
+  },
+  {
+    id: 4,
+    title: "Room Setup",
+    subtitle: "Hall configuration",
+  },
+];
+
+const STEPPER_ITEMS = [
+  { id: 1, label: "Movie", icon: "movie" },
+  { id: 2, label: "Venue", icon: "location_on" },
+  { id: 3, label: "Price", icon: "payments" },
+  { id: 4, label: "Room", icon: "event_seat" },
+];
+
+const VENUE_TYPES = ["Cinema Hall", "Open Air", "Cultural House", "Other"];
+
+const ADMIN_VENUES_STORAGE_KEY = "admin_venue_templates";
+const CREATE_EVENT_DRAFT_STORAGE_KEY = "organizer_create_event_draft_v1";
+const ADMIN_VALIDATION_QUEUE_STORAGE_KEY = "admin_event_validation_queue";
+const SERVICE_FEE_RATE = 0.075;
+const MAX_POSTER_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_POSTER_TYPES = ["image/jpeg", "image/png"];
+
+const DEFAULT_ADMIN_VENUES = [
+  {
+    id: "venue-template-imax-grand",
+    name: "Grand IMAX Theater",
+    type: "Cinema Hall",
+    location: "Tunis Centre",
+    capacity: 450,
+  },
+  {
+    id: "venue-template-royal-lounge",
+    name: "Royal Lounge",
+    type: "Cinema Hall",
+    location: "Sousse",
+    capacity: 120,
+  },
+  {
+    id: "venue-template-open-air-marina",
+    name: "Open Air Marina",
+    type: "Open Air",
+    location: "Monastir",
+    capacity: 300,
+  },
+  {
+    id: "venue-template-culture-house",
+    name: "Maison de Culture Ibn Khaldoun",
+    type: "Cultural House",
+    location: "Kairouan",
+    capacity: 220,
+  },
+];
+
+const CHARITY_ASSOCIATIONS = [
+  "Amal Childhood Association",
+  "Tunisian Red Crescent",
+  "Insaf Association",
+  "SOS Children's Villages Tunisia",
+];
+
+const VENUE_TYPE_ALIASES = {
+  "Salle de cinema": "Cinema Hall",
+  "Plein air": "Open Air",
+  "Maison de culture": "Cultural House",
+  Autre: "Other",
+};
+
+function normalizeVenueType(type) {
+  return VENUE_TYPE_ALIASES[type] || type;
+}
+
+const INITIAL_FORM_STATE = {
+  movieTitle: "",
+  genre: "",
+  durationMinutes: "",
+  synopsis: "",
+  director: "",
+  posterFile: null,
+  posterPreviewUrl: "",
+  venueType: "",
+  venueTemplateId: "",
+  screeningDate: "",
+  screeningTime: "",
+  pricingMode: "unique",
+  isFreeEvent: false,
+  singlePrice: "",
+  normalPrice: "",
+  studentPrice: "",
+  seniorPrice: "",
+  isCharityEvent: false,
+  charityAssociation: "",
+  minimumDonationSuggestion: "",
+  roomName: "",
+  totalSeats: "",
+  screenFormat: "2D",
+  wheelchairAccess: true,
+};
+
+function parsePositivePrice(value) {
+  if (value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function hasMaxThreeDecimals(value) {
+  return /^\d+(\.\d{1,3})?$/.test(String(value));
+}
+
+function asTnd(value) {
+  return `${value.toFixed(3)} TND`;
+}
+
+function toIsoDateTime(date, time) {
+  if (!date || !time) {
+    return null;
+  }
+  return new Date(`${date}T${time}`);
+}
+
+function getStoredAdminVenues() {
+  try {
+    const raw = localStorage.getItem(ADMIN_VENUES_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_ADMIN_VENUES;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.length) {
+      return DEFAULT_ADMIN_VENUES;
+    }
+
+    return parsed
+      .filter((item) => item && item.id && item.name && item.type)
+      .map((item) => ({
+        id: String(item.id),
+        name: String(item.name),
+        type: normalizeVenueType(String(item.type)),
+        location: item.location
+          ? String(item.location)
+          : "Location not specified",
+        capacity: Number(item.capacity) > 0 ? Number(item.capacity) : null,
+      }));
+  } catch {
+    return DEFAULT_ADMIN_VENUES;
+  }
+}
+
+export default function CreateEventPage() {
+  const { currentUser } = useSelector((state) => state.auth);
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState(INITIAL_FORM_STATE);
+  const [venues, setVenues] = useState(() => getStoredAdminVenues());
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [draftSavedAt, setDraftSavedAt] = useState(null);
+  const [submitCount, setSubmitCount] = useState(0);
+  const hydratedDraftRef = useRef(false);
+
+  const selectedVenue = useMemo(
+    () => venues.find((venue) => venue.id === form.venueTemplateId) || null,
+    [venues, form.venueTemplateId],
+  );
+
+  const filteredVenues = useMemo(() => {
+    if (!form.venueType) {
+      return venues;
+    }
+    return venues.filter((venue) => venue.type === form.venueType);
+  }, [venues, form.venueType]);
+
+  const baseTicketPrice = useMemo(() => {
+    if (form.isFreeEvent) {
+      return 0;
+    }
+
+    if (form.pricingMode === "unique") {
+      return parsePositivePrice(form.singlePrice) || 0;
+    }
+
+    const candidates = [form.normalPrice, form.studentPrice, form.seniorPrice]
+      .map((price) => parsePositivePrice(price) || 0)
+      .filter((price) => price > 0);
+
+    if (!candidates.length) {
+      return 0;
+    }
+
+    return Math.min(...candidates);
+  }, [
+    form.isFreeEvent,
+    form.pricingMode,
+    form.singlePrice,
+    form.normalPrice,
+    form.studentPrice,
+    form.seniorPrice,
+  ]);
+
+  const serviceFee = useMemo(() => {
+    if (form.isFreeEvent || baseTicketPrice <= 0) {
+      return 0;
+    }
+    return Number((baseTicketPrice * SERVICE_FEE_RATE).toFixed(3));
+  }, [form.isFreeEvent, baseTicketPrice]);
+
+  const spectatorTotal = useMemo(() => {
+    if (form.isFreeEvent || baseTicketPrice <= 0) {
+      return 0;
+    }
+    return Number((baseTicketPrice + serviceFee).toFixed(3));
+  }, [form.isFreeEvent, baseTicketPrice, serviceFee]);
+
+  useEffect(() => {
+    setVenues(getStoredAdminVenues());
+  }, []);
+
+  useEffect(() => {
+    try {
+      const rawDraft = localStorage.getItem(CREATE_EVENT_DRAFT_STORAGE_KEY);
+      if (!rawDraft) {
+        hydratedDraftRef.current = true;
+        return;
+      }
+
+      const parsedDraft = JSON.parse(rawDraft);
+      setForm((previous) => ({
+        ...previous,
+        ...parsedDraft,
+        posterFile: null,
+        posterPreviewUrl: "",
+      }));
+      setDraftSavedAt(parsedDraft._savedAt || null);
+      hydratedDraftRef.current = true;
+    } catch {
+      hydratedDraftRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedDraftRef.current) {
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => {
+      const payload = {
+        ...form,
+        posterFile: null,
+        posterPreviewUrl: "",
+        _savedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem(
+        CREATE_EVENT_DRAFT_STORAGE_KEY,
+        JSON.stringify(payload),
+      );
+      setDraftSavedAt(payload._savedAt);
+    }, 700);
+
+    return () => clearTimeout(timeoutId);
+  }, [form]);
+
+  useEffect(() => {
+    return () => {
+      if (form.posterPreviewUrl) {
+        URL.revokeObjectURL(form.posterPreviewUrl);
+      }
+    };
+  }, [form.posterPreviewUrl]);
+
+  const setField = (field, value) => {
+    setError("");
+    setSuccess("");
+    setForm((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const handleTextInput = (event) => {
+    const { name, type, checked, value } = event.target;
+    setField(name, type === "checkbox" ? checked : value);
+  };
+
+  const handlePriceInput = (event) => {
+    const { name, value } = event.target;
+    if (value === "" || /^\d*(\.\d{0,3})?$/.test(value)) {
+      setField(name, value);
+    }
+  };
+
+  const handlePosterUpload = (event) => {
+    const file = event.target.files?.[0] || null;
+    setError("");
+
+    if (!file) {
+      setForm((previous) => ({
+        ...previous,
+        posterFile: null,
+        posterPreviewUrl: "",
+      }));
+      return;
+    }
+
+    if (!ALLOWED_POSTER_TYPES.includes(file.type)) {
+      setError("Invalid poster: only JPG or PNG is allowed.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_POSTER_SIZE_BYTES) {
+      setError("Invalid poster: maximum size is 5MB.");
+      event.target.value = "";
+      return;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(file);
+    setForm((previous) => {
+      if (previous.posterPreviewUrl) {
+        URL.revokeObjectURL(previous.posterPreviewUrl);
+      }
+
+      return {
+        ...previous,
+        posterFile: file,
+        posterPreviewUrl: nextPreviewUrl,
+      };
+    });
+  };
+
+  const validateStep1 = () => {
+    if (!form.movieTitle.trim()) {
+      return "Movie title is required.";
+    }
+    if (!form.genre.trim()) {
+      return "Genre is required.";
+    }
+    if (!form.durationMinutes || Number(form.durationMinutes) <= 0) {
+      return "Movie duration is required.";
+    }
+    if (!form.synopsis.trim()) {
+      return "Synopsis is required.";
+    }
+    if (!form.director.trim()) {
+      return "Director is required.";
+    }
+    if (!form.posterFile) {
+      return "Movie poster (JPG/PNG) is required.";
+    }
+
+    return "";
+  };
+
+  const validateStep2 = () => {
+    if (!form.venueType) {
+      return "Please select a venue type.";
+    }
+    if (!form.venueTemplateId) {
+      return "Please select a venue created by admin.";
+    }
+    if (!form.screeningDate || !form.screeningTime) {
+      return "Screening date and time are required.";
+    }
+
+    const screeningDateTime = toIsoDateTime(
+      form.screeningDate,
+      form.screeningTime,
+    );
+    if (!screeningDateTime || Number.isNaN(screeningDateTime.valueOf())) {
+      return "Invalid date or time.";
+    }
+    if (screeningDateTime <= new Date()) {
+      return "Screening must be scheduled in the future.";
+    }
+
+    return "";
+  };
+
+  const validatePriceField = (label, value) => {
+    if (!value) {
+      return `${label} price is required.`;
+    }
+    if (!hasMaxThreeDecimals(value)) {
+      return `${label} price can have at most 3 decimals.`;
+    }
+    if (!parsePositivePrice(value)) {
+      return `${label} price must be strictly positive.`;
+    }
+    return "";
+  };
+
+  const validateStep3 = () => {
+    if (!form.isFreeEvent) {
+      if (form.pricingMode === "unique") {
+        const singlePriceError = validatePriceField("unique", form.singlePrice);
+        if (singlePriceError) {
+          return singlePriceError;
+        }
+      } else {
+        const normalPriceError = validatePriceField("normal", form.normalPrice);
+        if (normalPriceError) {
+          return normalPriceError;
+        }
+        const studentPriceError = validatePriceField(
+          "student",
+          form.studentPrice,
+        );
+        if (studentPriceError) {
+          return studentPriceError;
+        }
+        const seniorPriceError = validatePriceField("senior", form.seniorPrice);
+        if (seniorPriceError) {
+          return seniorPriceError;
+        }
+      }
+    }
+
+    if (form.isCharityEvent) {
+      if (!form.charityAssociation) {
+        return "Please select a beneficiary association.";
+      }
+      if (!form.minimumDonationSuggestion) {
+        return "Please add a minimum donation suggestion.";
+      }
+      if (!hasMaxThreeDecimals(form.minimumDonationSuggestion)) {
+        return "Minimum donation can have at most 3 decimals.";
+      }
+      if (!parsePositivePrice(form.minimumDonationSuggestion)) {
+        return "Minimum donation must be strictly positive.";
+      }
+    }
+
+    return "";
+  };
+
+  const validateStep4 = () => {
+    if (!form.roomName.trim()) {
+      return "Room name is required.";
+    }
+    if (!form.totalSeats || Number(form.totalSeats) <= 0) {
+      return "Total seats must be greater than 0.";
+    }
+    return "";
+  };
+
+  const validateCurrentStep = () => {
+    if (step === 1) {
+      return validateStep1();
+    }
+    if (step === 2) {
+      return validateStep2();
+    }
+    if (step === 3) {
+      return validateStep3();
+    }
+    return validateStep4();
+  };
+
+  const handleNextStep = () => {
+    const validationError = validateCurrentStep();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError("");
+    setStep((previous) => Math.min(previous + 1, 4));
+  };
+
+  const handlePreviousStep = () => {
+    setError("");
+    setStep((previous) => Math.max(previous - 1, 1));
+  };
+
+  const clearDraft = () => {
+    localStorage.removeItem(CREATE_EVENT_DRAFT_STORAGE_KEY);
+    setDraftSavedAt(null);
+  };
+
+  const handleSubmitForValidation = () => {
+    const validators = [
+      validateStep1,
+      validateStep2,
+      validateStep3,
+      validateStep4,
+    ];
+    for (const validator of validators) {
+      const possibleError = validator();
+      if (possibleError) {
+        setError(possibleError);
+        return;
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const payload = {
+      id: `submission-${Date.now()}`,
+      submittedAt: nowIso,
+      submittedBy: {
+        organizerId: currentUser?._id || currentUser?.id || null,
+        organizerName: currentUser?.name || "Organizer",
+        organizationName:
+          currentUser?.organizerProfile?.organizationName || "Organization",
+      },
+      status: "pending_validation",
+      movie: {
+        title: form.movieTitle.trim(),
+        genre: form.genre.trim(),
+        durationMinutes: Number(form.durationMinutes),
+        synopsis: form.synopsis.trim(),
+        director: form.director.trim(),
+        posterFileName: form.posterFile?.name || "",
+      },
+      projection: {
+        date: form.screeningDate,
+        time: form.screeningTime,
+        dateTimeIso: toIsoDateTime(
+          form.screeningDate,
+          form.screeningTime,
+        )?.toISOString(),
+      },
+      venue: {
+        venueType: form.venueType,
+        venueTemplateId: form.venueTemplateId,
+        venueTemplateName: selectedVenue?.name || "",
+        location: selectedVenue?.location || "",
+      },
+      pricing: {
+        currency: "TND",
+        isFreeEvent: form.isFreeEvent,
+        pricingMode: form.pricingMode,
+        singlePrice: form.isFreeEvent ? 0 : Number(form.singlePrice || 0),
+        categories:
+          form.pricingMode === "byCategory"
+            ? {
+                normal: Number(form.normalPrice || 0),
+                student: Number(form.studentPrice || 0),
+                senior: Number(form.seniorPrice || 0),
+              }
+            : null,
+        serviceFeeRate: SERVICE_FEE_RATE,
+        serviceFee,
+        spectatorTotal,
+      },
+      charity: {
+        isCharityEvent: form.isCharityEvent,
+        beneficiaryAssociation: form.isCharityEvent
+          ? form.charityAssociation
+          : null,
+        minimumDonationSuggestion: form.isCharityEvent
+          ? Number(form.minimumDonationSuggestion)
+          : null,
+      },
+      roomConfiguration: {
+        roomName: form.roomName.trim(),
+        totalSeats: Number(form.totalSeats),
+        screenFormat: form.screenFormat,
+        wheelchairAccess: form.wheelchairAccess,
+      },
+    };
+
+    const queued = JSON.parse(
+      localStorage.getItem(ADMIN_VALIDATION_QUEUE_STORAGE_KEY) || "[]",
+    );
+    queued.unshift(payload);
+    localStorage.setItem(
+      ADMIN_VALIDATION_QUEUE_STORAGE_KEY,
+      JSON.stringify(queued),
+    );
+
+    clearDraft();
+    setSubmitCount((previous) => previous + 1);
+    setStep(1);
+    setForm(INITIAL_FORM_STATE);
+    setError("");
+    setSuccess(
+      "Event submitted for admin validation. It is now pending review.",
+    );
+  };
+
+  const renderStepContent = () => {
+    if (step === 1) {
+      return (
+        <div className="grid gap-6 md:grid-cols-2">
+          <label className="space-y-2 md:col-span-2">
+            <span className="text-sm font-semibold text-white/80">
+              Movie title *
+            </span>
+            <input
+              name="movieTitle"
+              value={form.movieTitle}
+              onChange={handleTextInput}
+              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+              placeholder="Ex: Interstellar"
+              type="text"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-semibold text-white/80">Genre *</span>
+            <input
+              name="genre"
+              value={form.genre}
+              onChange={handleTextInput}
+              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+              placeholder="Science fiction"
+              type="text"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-semibold text-white/80">
+              Duration (min) *
+            </span>
+            <input
+              name="durationMinutes"
+              value={form.durationMinutes}
+              onChange={handleTextInput}
+              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+              placeholder="120"
+              min="1"
+              type="number"
+            />
+          </label>
+
+          <label className="space-y-2 md:col-span-2">
+            <span className="text-sm font-semibold text-white/80">
+              Synopsis *
+            </span>
+            <textarea
+              name="synopsis"
+              value={form.synopsis}
+              onChange={handleTextInput}
+              className="min-h-28 w-full rounded-xl border border-white/10 bg-background-dark px-4 py-3 text-sm text-white outline-none transition focus:border-accent"
+              placeholder="Short story summary"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-semibold text-white/80">
+              Director *
+            </span>
+            <input
+              name="director"
+              value={form.director}
+              onChange={handleTextInput}
+              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+              placeholder="Christopher Nolan"
+              type="text"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-semibold text-white/80">
+              Movie poster (JPG/PNG, max 5MB) *
+            </span>
+            <input
+              accept="image/jpeg,image/png"
+              onChange={handlePosterUpload}
+              className="block w-full rounded-xl border border-dashed border-white/20 bg-background-dark p-3 text-sm text-white/80 file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-xs file:font-black file:text-charcoal"
+              type="file"
+            />
+            <p className="text-xs text-white/40">
+              The uploaded image cannot be auto-restored after browser restart.
+            </p>
+          </label>
+
+          {form.posterPreviewUrl && (
+            <div className="md:col-span-2">
+              <p className="mb-2 text-xs uppercase tracking-wider text-white/50">
+                Poster preview
+              </p>
+              <img
+                src={form.posterPreviewUrl}
+                alt="Poster preview"
+                className="h-56 w-full rounded-xl border border-white/10 object-cover"
+              />
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (step === 2) {
+      return (
+        <div className="grid gap-6 md:grid-cols-2">
+          <label className="space-y-2">
+            <span className="text-sm font-semibold text-white/80">
+              Venue type *
+            </span>
+            <select
+              name="venueType"
+              value={form.venueType}
+              onChange={(event) => {
+                const selectedType = event.target.value;
+                setForm((previous) => ({
+                  ...previous,
+                  venueType: selectedType,
+                  venueTemplateId: "",
+                }));
+                setError("");
+                setSuccess("");
+              }}
+              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent">
+              <option value="">Select</option>
+              {VENUE_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-semibold text-white/80">
+              Admin-approved venue *
+            </span>
+            <select
+              name="venueTemplateId"
+              value={form.venueTemplateId}
+              onChange={handleTextInput}
+              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent">
+              <option value="">Select a venue</option>
+              {filteredVenues.map((venue) => (
+                <option key={venue.id} value={venue.id}>
+                  {venue.name} - {venue.location}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-semibold text-white/80">
+              Screening date *
+            </span>
+            <input
+              name="screeningDate"
+              value={form.screeningDate}
+              onChange={handleTextInput}
+              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+              type="date"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-semibold text-white/80">
+              Screening time *
+            </span>
+            <input
+              name="screeningTime"
+              value={form.screeningTime}
+              onChange={handleTextInput}
+              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+              type="time"
+            />
+          </label>
+
+          {selectedVenue && (
+            <article className="md:col-span-2 rounded-2xl border border-accent/30 bg-accent/10 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-accent">
+                Selected venue
+              </p>
+              <h4 className="mt-2 text-lg font-black text-white">
+                {selectedVenue.name}
+              </h4>
+              <p className="text-sm text-white/70">
+                {selectedVenue.type} - {selectedVenue.location}
+                {selectedVenue.capacity
+                  ? ` - ${selectedVenue.capacity} seats`
+                  : ""}
+              </p>
+            </article>
+          )}
+        </div>
+      );
+    }
+
+    if (step === 3) {
+      return (
+        <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-background-dark p-4">
+              <input
+                checked={form.isFreeEvent}
+                name="isFreeEvent"
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setForm((previous) => ({
+                    ...previous,
+                    isFreeEvent: checked,
+                    singlePrice: checked ? "" : previous.singlePrice,
+                    normalPrice: checked ? "" : previous.normalPrice,
+                    studentPrice: checked ? "" : previous.studentPrice,
+                    seniorPrice: checked ? "" : previous.seniorPrice,
+                  }));
+                }}
+                type="checkbox"
+              />
+              <span className="text-sm font-semibold text-white">
+                Free event
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-background-dark p-4">
+              <input
+                checked={form.isCharityEvent}
+                name="isCharityEvent"
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setForm((previous) => ({
+                    ...previous,
+                    isCharityEvent: checked,
+                    charityAssociation: checked
+                      ? previous.charityAssociation
+                      : "",
+                    minimumDonationSuggestion: checked
+                      ? previous.minimumDonationSuggestion
+                      : "",
+                  }));
+                }}
+                type="checkbox"
+              />
+              <span className="text-sm font-semibold text-white">
+                Charity event
+              </span>
+            </label>
+          </div>
+
+          {!form.isFreeEvent && (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-sm font-semibold text-white/80">
+                    Pricing mode *
+                  </span>
+                  <select
+                    name="pricingMode"
+                    value={form.pricingMode}
+                    onChange={handleTextInput}
+                    className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent">
+                    <option value="unique">Single price</option>
+                    <option value="byCategory">Category pricing</option>
+                  </select>
+                </label>
+              </div>
+
+              {form.pricingMode === "unique" ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-sm font-semibold text-white/80">
+                      Single price (TND) *
+                    </span>
+                    <input
+                      name="singlePrice"
+                      value={form.singlePrice}
+                      onChange={handlePriceInput}
+                      className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                      placeholder="25.500"
+                      type="text"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-3">
+                  <label className="space-y-2">
+                    <span className="text-sm font-semibold text-white/80">
+                      Normal (TND) *
+                    </span>
+                    <input
+                      name="normalPrice"
+                      value={form.normalPrice}
+                      onChange={handlePriceInput}
+                      className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                      placeholder="30.000"
+                      type="text"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-sm font-semibold text-white/80">
+                      Student (TND) *
+                    </span>
+                    <input
+                      name="studentPrice"
+                      value={form.studentPrice}
+                      onChange={handlePriceInput}
+                      className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                      placeholder="20.000"
+                      type="text"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-sm font-semibold text-white/80">
+                      Senior (TND) *
+                    </span>
+                    <input
+                      name="seniorPrice"
+                      value={form.seniorPrice}
+                      onChange={handlePriceInput}
+                      className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                      placeholder="18.500"
+                      type="text"
+                    />
+                  </label>
+                </div>
+              )}
+            </>
+          )}
+
+          {form.isCharityEvent && (
+            <div className="grid gap-4 rounded-2xl border border-accent/30 bg-accent/10 p-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-sm font-semibold text-white">
+                  Beneficiary association *
+                </span>
+                <select
+                  name="charityAssociation"
+                  value={form.charityAssociation}
+                  onChange={handleTextInput}
+                  className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent">
+                  <option value="">Select an association</option>
+                  {CHARITY_ASSOCIATIONS.map((association) => (
+                    <option key={association} value={association}>
+                      {association}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-sm font-semibold text-white">
+                  Minimum donation suggestion (TND) *
+                </span>
+                <input
+                  name="minimumDonationSuggestion"
+                  value={form.minimumDonationSuggestion}
+                  onChange={handlePriceInput}
+                  className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                  placeholder="5.000"
+                  type="text"
+                />
+              </label>
+            </div>
+          )}
+
+          <article className="rounded-2xl border border-white/10 bg-background-dark/70 p-4">
+            <p className="text-xs uppercase tracking-[0.15em] text-white/50">
+              Spectator preview
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-white/50">Ticket base</p>
+                <p className="mt-1 text-lg font-black text-white">
+                  {asTnd(baseTicketPrice)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-white/50">Service fee</p>
+                <p className="mt-1 text-lg font-black text-white">
+                  {asTnd(serviceFee)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-accent/40 bg-accent/20 p-3">
+                <p className="text-xs text-accent">Spectator total</p>
+                <p className="mt-1 text-lg font-black text-white">
+                  {asTnd(spectatorTotal)}
+                </p>
+              </div>
+            </div>
+          </article>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-6 md:grid-cols-2">
+        <label className="space-y-2">
+          <span className="text-sm font-semibold text-white/80">
+            Room name *
+          </span>
+          <input
+            name="roomName"
+            value={form.roomName}
+            onChange={handleTextInput}
+            className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+            placeholder="Room 1"
+            type="text"
+          />
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-semibold text-white/80">
+            Total seats *
+          </span>
+          <input
+            name="totalSeats"
+            value={form.totalSeats}
+            onChange={handleTextInput}
+            className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+            min="1"
+            placeholder="200"
+            type="number"
+          />
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-semibold text-white/80">
+            Screen format
+          </span>
+          <select
+            name="screenFormat"
+            value={form.screenFormat}
+            onChange={handleTextInput}
+            className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent">
+            <option value="2D">2D</option>
+            <option value="3D">3D</option>
+            <option value="IMAX">IMAX</option>
+            <option value="4DX">4DX</option>
+          </select>
+        </label>
+
+        <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-background-dark p-4 md:mt-7">
+          <input
+            checked={form.wheelchairAccess}
+            name="wheelchairAccess"
+            onChange={handleTextInput}
+            type="checkbox"
+          />
+          <span className="text-sm font-semibold text-white">
+            Wheelchair seats available
+          </span>
+        </label>
+      </div>
+    );
+  };
+
+  const stepInfo = STEPS.find((item) => item.id === step);
+
+  return (
+    <OrganizerPageFrame
+      title="Create Event"
+      subtitle="Multi-step workflow aligned with admin review standards">
+      <section className="space-y-6">
+        <div className="relative mb-2 flex items-center justify-between px-2 md:px-4">
+          <div className="absolute left-0 top-1/2 z-0 h-[1px] w-full -translate-y-1/2 bg-white/10" />
+          {STEPPER_ITEMS.map((item) => {
+            const isReached = step >= item.id;
+
+            return (
+              <div
+                key={item.id}
+                className="relative z-10 flex flex-col items-center gap-2 bg-background-dark px-1 md:px-3">
+                <div
+                  className={`flex h-11 w-11 items-center justify-center rounded-full border-2 text-sm font-bold transition ${
+                    isReached
+                      ? "border-accent bg-accent text-charcoal"
+                      : "border-white/10 bg-background-dark text-white/40"
+                  }`}>
+                  <span className="material-symbols-outlined text-[20px]">
+                    {item.icon}
+                  </span>
+                </div>
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-widest ${
+                    isReached ? "text-accent" : "text-white/40"
+                  }`}>
+                  {item.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <article className="rounded-2xl border border-white/10 bg-white/5 p-6">
+            <div className="mb-6">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-accent">
+                {stepInfo?.title}
+              </p>
+              <h2 className="mt-2 text-2xl font-black text-white">
+                Create event
+              </h2>
+              <p className="mt-2 text-sm text-white/70">{stepInfo?.subtitle}</p>
+            </div>
+
+            {renderStepContent()}
+
+            {error && (
+              <div className="mt-5 rounded-xl border border-red-400/30 bg-red-400/10 p-3 text-sm text-red-200">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="mt-5 rounded-xl border border-green-400/30 bg-green-400/10 p-3 text-sm text-green-200">
+                {success}
+              </div>
+            )}
+
+            <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
+              <button
+                type="button"
+                onClick={handlePreviousStep}
+                disabled={step === 1}
+                className="rounded-xl border border-white/20 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40">
+                Back
+              </button>
+
+              <div className="flex flex-wrap items-center gap-3">
+                {step < 4 ? (
+                  <button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="rounded-xl bg-primary px-5 py-2 text-sm font-black text-white transition hover:brightness-110">
+                    Continue
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSubmitForValidation}
+                    className="rounded-xl bg-accent px-5 py-2 text-sm font-black text-charcoal transition hover:brightness-110">
+                    Submit for validation
+                  </button>
+                )}
+              </div>
+            </div>
+          </article>
+
+          <aside className="space-y-4">
+            <article className="rounded-2xl border border-white/10 bg-white/5 p-5">
+              <p className="text-xs uppercase tracking-[0.15em] text-white/50">
+                Draft
+              </p>
+              <p className="mt-2 text-sm text-white/80">
+                Auto-save is active{draftSavedAt ? "." : " (waiting...)"}
+              </p>
+              {draftSavedAt && (
+                <p className="mt-2 text-xs text-white/50">
+                  Last save: {new Date(draftSavedAt).toLocaleString()}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  clearDraft();
+                  setForm(INITIAL_FORM_STATE);
+                  setError("");
+                  setSuccess("Draft cleared.");
+                  setStep(1);
+                }}
+                className="mt-4 rounded-lg border border-white/20 px-3 py-2 text-xs font-bold text-white/80 transition hover:bg-white/10">
+                Reset draft
+              </button>
+            </article>
+
+            <article className="rounded-2xl border border-accent/30 bg-accent/10 p-5">
+              <p className="text-xs uppercase tracking-[0.15em] text-accent">
+                Price controls
+              </p>
+              <ul className="mt-3 space-y-2 text-sm text-white/85">
+                <li>TND pricing with up to 3 decimals.</li>
+                <li>
+                  Automatic service fee: {(SERVICE_FEE_RATE * 100).toFixed(1)}%.
+                </li>
+                <li>Real-time spectator total preview.</li>
+              </ul>
+            </article>
+
+            <article className="rounded-2xl border border-white/10 bg-background-dark/70 p-5">
+              <p className="text-xs uppercase tracking-[0.15em] text-white/50">
+                Quick summary
+              </p>
+              <div className="mt-3 space-y-3 text-sm text-white/80">
+                <p>
+                  <span className="text-white/50">Movie:</span>{" "}
+                  {form.movieTitle || "-"}
+                </p>
+                <p>
+                  <span className="text-white/50">Venue:</span>{" "}
+                  {selectedVenue?.name || "-"}
+                </p>
+                <p>
+                  <span className="text-white/50">Screening:</span>{" "}
+                  {form.screeningDate && form.screeningTime
+                    ? `${form.screeningDate} ${form.screeningTime}`
+                    : "-"}
+                </p>
+                <p>
+                  <span className="text-white/50">Spectator pays:</span>{" "}
+                  {asTnd(spectatorTotal)}
+                </p>
+                <p>
+                  <span className="text-white/50">
+                    Submissions this session:
+                  </span>{" "}
+                  {submitCount}
+                </p>
+              </div>
+            </article>
+          </aside>
+        </div>
+      </section>
+    </OrganizerPageFrame>
+  );
+}

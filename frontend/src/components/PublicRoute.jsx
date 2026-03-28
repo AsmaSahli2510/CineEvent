@@ -17,6 +17,10 @@ export default function PublicRoute({ children }) {
       return <Navigate to="/admin/dashboard" replace />;
     }
 
+    if (currentUser.role === "organizer") {
+      return <Navigate to="/organizer/dashboard" replace />;
+    }
+
     return <Navigate to="/" replace />;
   }
 
