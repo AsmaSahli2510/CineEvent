@@ -1,21 +1,363 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import AdminPageFrame from "../../components/admin/AdminPageFrame";
+import {
+  deleteVenueTemplate,
+  getVenueTemplates,
+} from "../../api/venueTemplateApi";
 
-function Dots({ total, active = [], colsClass, gapClass }) {
+const SEAT_COLOR_CLASS = {
+  standard: "bg-white/60",
+  premium: "bg-primary/90",
+  vip: "bg-accent",
+  accessible: "bg-pmr-green",
+  bench: "bg-amber-400",
+};
+
+const ROW_TEXT_CLASS = {
+  standard: "text-white",
+  premium: "text-primary",
+  vip: "text-accent",
+  accessible: "text-pmr-green",
+  bench: "text-amber-300",
+};
+
+const ZONE_BADGE_CLASS = {
+  standard: "border-white/25 bg-white/10 text-white",
+  premium: "border-primary/40 bg-primary/20 text-primary",
+  vip: "border-accent/40 bg-accent/20 text-accent",
+  accessible: "border-pmr-green/50 bg-pmr-green/20 text-pmr-green",
+  bench: "border-amber-400/50 bg-amber-500/20 text-amber-200",
+};
+
+const STRUCTURE_ICON = {
+  entrance: "door_front",
+  food: "local_dining",
+  bar: "local_bar",
+  shelter: "roofing",
+  restroom: "wc",
+  lounge: "weekend",
+  projection: "movie",
+  backstage: "theater_comedy",
+};
+
+function getSeatTypeFromRow(row, seatNumber) {
+  const seatOverrides = row?.seatOverrides || {};
+
+  if (Object.prototype.hasOwnProperty.call(seatOverrides, seatNumber)) {
+    return seatOverrides[seatNumber];
+  }
+
+  const wheelchairSeats = Math.max(0, Number(row?.wheelchair) || 0);
+  if (seatNumber <= wheelchairSeats) {
+    return "accessible";
+  }
+
+  return row?.zoneId || "standard";
+}
+
+function dominantZoneForRow(row) {
+  const seatCount = Math.max(1, Number(row?.seats) || 1);
+  const counts = {};
+
+  for (let seatNumber = 1; seatNumber <= seatCount; seatNumber += 1) {
+    const seatType = getSeatTypeFromRow(row, seatNumber);
+    counts[seatType] = (counts[seatType] || 0) + 1;
+  }
+
   return (
-    <div className={`grid ${colsClass} ${gapClass} opacity-60`}>
-      {Array.from({ length: total }).map((_, index) => (
-        <div
-          key={index}
-          className={`minimap-dot ${active.includes(index) ? "active" : ""}`}
-        />
-      ))}
+    Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "standard"
+  );
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  try {
+    return new Date(value).toLocaleDateString();
+  } catch {
+    return "-";
+  }
+}
+
+function ambienceClass(ambience) {
+  if (ambience === "sky") {
+    return "from-sky-500/20 via-cyan-400/10 to-background-dark";
+  }
+  if (ambience === "festival") {
+    return "from-primary/30 via-accent/15 to-background-dark";
+  }
+  return "from-white/15 via-white/5 to-background-dark";
+}
+
+function statusClass(status) {
+  if (status === "published") {
+    return "border-emerald-400/35 bg-emerald-500/15 text-emerald-200";
+  }
+  return "border-amber-400/35 bg-amber-500/15 text-amber-100";
+}
+
+function MiniVenueMap({ rows = [], structures = [], screenLabel = "SCREEN" }) {
+  const mapRows = Array.isArray(rows) ? rows : [];
+  const rowCount = mapRows.length;
+  const seatSampleSize =
+    rowCount > 30 ? 8 : rowCount > 20 ? 10 : rowCount > 12 ? 12 : 14;
+  const rowGap =
+    rowCount > 30 ? "0.1rem" : rowCount > 20 ? "0.15rem" : "0.25rem";
+  const dotSize =
+    rowCount > 30 ? "0.2rem" : rowCount > 20 ? "0.22rem" : "0.25rem";
+  const rowLabelClass = rowCount > 20 ? "text-[8px]" : "text-[9px]";
+
+  return (
+    <div className="relative h-32 overflow-hidden rounded-2xl border border-white/10 bg-charcoal p-2.5">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(245,192,101,0.12),transparent_45%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,0.08),transparent_45%)]" />
+      <div className="relative mb-1.5">
+        <div className="h-1.5 w-2/3 rounded-full bg-gradient-to-r from-accent/75 via-accent/40 to-transparent shadow-[0_0_12px_rgba(245,192,101,0.35)]" />
+        <p className="mt-0.5 text-[8px] font-black uppercase tracking-[0.18em] text-accent/80">
+          {screenLabel}
+        </p>
+      </div>
+      <div
+        className="relative"
+        style={{
+          display: "grid",
+          rowGap,
+        }}>
+        {mapRows.length ? (
+          mapRows.map((row, index) => {
+            const seats = Math.max(1, Number(row?.seats) || 1);
+            const dots = Math.min(seatSampleSize, seats);
+            const rowZone = dominantZoneForRow(row);
+            return (
+              <div
+                key={`${row.editorId || row.label}-${index}`}
+                className="mx-auto flex w-full items-center">
+                <span
+                  className={`w-6 flex-shrink-0 pr-1 text-right font-mono font-black leading-none ${rowLabelClass} ${ROW_TEXT_CLASS[rowZone] || "text-white"}`}>
+                  {row?.label || String.fromCharCode(65 + index)}
+                </span>
+                <div
+                  className="flex flex-1 items-center justify-start pl-0.5"
+                  style={{ gap: rowCount > 24 ? "0.14rem" : "0.2rem" }}>
+                  {Array.from({ length: dots }).map((_, seatIndex) => {
+                    const sourceSeatNumber =
+                      Math.floor((seatIndex / dots) * seats) + 1;
+                    const seatType = getSeatTypeFromRow(row, sourceSeatNumber);
+
+                    return (
+                      <span
+                        key={seatIndex}
+                        className={`rounded-[3px] border border-black/25 shadow-[0_1px_2px_rgba(0,0,0,0.35)] ${SEAT_COLOR_CLASS[seatType] || "bg-white/60"}`}
+                        style={{ width: dotSize, height: dotSize }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="rounded-xl border border-dashed border-white/20 px-3 py-6 text-center text-xs text-white/35">
+            Blank layout
+          </div>
+        )}
+      </div>
+
+      {structures.length ? (
+        <div className="absolute bottom-1.5 right-1.5 flex max-w-[65%] flex-wrap justify-end gap-1">
+          {structures.slice(0, 4).map((structure, index) => {
+            const icon = STRUCTURE_ICON[structure?.type] || "category";
+            return (
+              <span
+                key={`${structure?.editorId || structure?.name || "s"}-${index}`}
+                className="inline-flex h-4 items-center rounded-full border border-white/20 bg-black/35 px-1.5 text-[8px] text-white/70">
+                <span className="material-symbols-outlined text-[10px] leading-none">
+                  {icon}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
 
+function TemplateCard({ template, onDelete, isDeleting }) {
+  const zoneKeys = Object.keys(template?.stats?.zones || {});
+
+  return (
+    <article className="group overflow-hidden rounded-2xl border border-white/10 bg-charcoal/70 shadow-[0_18px_50px_rgba(0,0,0,0.35)] transition-all duration-300 hover:-translate-y-1 hover:border-accent/40">
+      <div
+        className={`relative border-b border-white/10 bg-gradient-to-br ${ambienceClass(template.ambience)} p-4`}>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-black tracking-tight text-white">
+              {template.name}
+            </h3>
+            <p className="text-[11px] text-white/55">
+              {template.subtitle || "No subtitle"}
+            </p>
+          </div>
+          <span
+            className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${statusClass(template.status)}`}>
+            {template.status}
+          </span>
+        </div>
+
+        <MiniVenueMap
+          rows={template.rows || []}
+          screenLabel={template.screenLabel}
+          structures={template.structures || []}
+        />
+      </div>
+
+      <div className="space-y-4 p-4">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wider text-white/45">
+              Capacity
+            </p>
+            <p className="text-lg font-black text-white">
+              {template?.stats?.capacity || 0}
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wider text-white/45">
+              Rows
+            </p>
+            <p className="text-lg font-black text-white">
+              {template?.stats?.rows || 0}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {zoneKeys.length ? (
+            zoneKeys.slice(0, 4).map((zone) => (
+              <span
+                key={`${template._id}-${zone}`}
+                className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-wide ${ZONE_BADGE_CLASS[zone] || "border-white/15 bg-white/5 text-white/70"}`}>
+                {zone}: {template.stats.zones[zone]}
+              </span>
+            ))
+          ) : (
+            <span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-wide text-white/50">
+              no zones yet
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between text-[11px] text-white/45">
+          <span>Structures: {template?.structures?.length || 0}</span>
+          <span>Updated: {formatDate(template.updatedAt)}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link
+            className="flex-1 rounded-lg border border-accent/35 bg-accent/15 px-3 py-2 text-center text-xs font-bold text-accent transition-colors hover:bg-accent/25"
+            to={`/admin/rooms/templates?templateId=${template._id}`}>
+            Open Builder
+          </Link>
+          <button
+            className="rounded-lg border border-red-500/25 bg-red-500/10 px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide text-red-200 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isDeleting}
+            onClick={() => onDelete(template)}
+            type="button">
+            {isDeleting ? "Deleting" : "Delete"}
+          </button>
+          <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-white/55">
+            {template.presetId || "custom"}
+          </span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function VenueTemplateManagementPage() {
+  const [templates, setTemplates] = useState([]);
+  const [pagination, setPagination] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [deletingTemplateId, setDeletingTemplateId] = useState(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 280);
+
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const loadTemplates = async () => {
+    try {
+      setIsLoading(true);
+      setError("");
+
+      const result = await getVenueTemplates({
+        status: statusFilter === "all" ? undefined : statusFilter,
+        q: debouncedQuery || undefined,
+        page: 1,
+        limit: 48,
+      });
+
+      setTemplates(result.templates || []);
+      setPagination(result.pagination || null);
+    } catch (fetchError) {
+      setError(fetchError.message || "Failed to load templates");
+      setTemplates([]);
+      setPagination(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTemplates();
+  }, [statusFilter, debouncedQuery]);
+
+  const handleDeleteTemplate = async (template) => {
+    const confirmed = window.confirm(
+      `Delete template "${template.name}"? This action cannot be undone.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingTemplateId(template._id);
+      setError("");
+      await deleteVenueTemplate(template._id);
+      setTemplates((prev) => prev.filter((item) => item._id !== template._id));
+      setPagination((prev) =>
+        prev
+          ? {
+              ...prev,
+              total: Math.max(0, Number(prev.total || 0) - 1),
+            }
+          : prev,
+      );
+    } catch (deleteError) {
+      setError(deleteError.message || "Failed to delete template");
+    } finally {
+      setDeletingTemplateId(null);
+    }
+  };
+
+  const summary = useMemo(() => {
+    const published = templates.filter(
+      (item) => item.status === "published",
+    ).length;
+    const drafts = templates.filter((item) => item.status === "draft").length;
+    return { published, drafts };
+  }, [templates]);
+
   return (
     <>
       <style>{`
@@ -35,478 +377,101 @@ export default function VenueTemplateManagementPage() {
           background: #F5C065;
           border-radius: 10px;
         }
-
-        .venue-template-management-page .minimap-dot {
-          width: 0.375rem;
-          height: 0.375rem;
-          border-radius: 9999px;
-          background: rgba(245, 192, 101, 0.2);
-        }
-
-        .venue-template-management-page .minimap-dot.active {
-          background: #F5C065;
-          box-shadow: 0 0 5px rgba(245, 192, 101, 0.8);
-        }
-
-        .venue-template-management-page .glass-card {
-          background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
-          backdrop-filter: blur(10px);
-        }
       `}</style>
 
-      <div className="venue-template-management-page bg-background-dark text-white min-h-screen">
+      <div className="venue-template-management-page min-h-screen bg-background-dark text-white">
         <AdminPageFrame
-          title="Master Venue Template Catalog"
-          subtitle="Create and manage high-fidelity seating blueprints">
-          <aside className="hidden w-72 border-r border-white/10 flex-col fixed h-full bg-charcoal z-50">
-            <div className="p-8">
-              <div className="flex items-center gap-3">
-                <div className="text-accent">
-                  <span className="material-symbols-outlined text-4xl">
-                    movie_filter
-                  </span>
-                </div>
-                <h1 className="text-2xl font-black tracking-tighter text-white">
-                  CINE<span className="text-accent">ADMIN</span>
-                </h1>
-              </div>
-              <p className="text-[10px] text-accent tracking-[0.2em] font-bold uppercase mt-1 opacity-80">
-                Admin Console
-              </p>
-            </div>
-
-            <nav className="flex-1 px-4 space-y-2">
-              <Link
-                className="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-white/5 text-white/60 transition-all"
-                to="/admin/dashboard">
-                <span className="material-symbols-outlined">dashboard</span>
-                Dashboard
-              </Link>
-              <Link
-                className="flex items-center gap-4 px-4 py-3 rounded-xl bg-primary text-white font-bold"
-                to="/admin/venues/templates">
-                <span className="material-symbols-outlined">layers</span>
-                Venue Templates
-              </Link>
-              <Link
-                className="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-white/5 text-white/60 hover:text-white transition-all"
-                to="/admin/rooms/templates">
-                <span className="material-symbols-outlined">
-                  theater_comedy
-                </span>
-                Room Templates
-              </Link>
-              <Link
-                className="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-white/5 text-white/60 hover:text-white transition-all"
-                to="/admin/revenue">
-                <span className="material-symbols-outlined">payments</span>
-                Revenue
-              </Link>
-              <Link
-                className="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-white/5 text-white/60 hover:text-white transition-all"
-                to="/admin/users">
-                <span className="material-symbols-outlined">group</span>
-                User Management
-              </Link>
-            </nav>
-
-            <div className="p-6 mt-auto">
-              <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-charcoal">
-                    <span className="material-symbols-outlined">
-                      admin_panel_settings
+          title=" Venue Template Catalog"
+          subtitle="Live templates from database">
+          <main className="space-y-6">
+            <section className="rounded-2xl border border-white/10 bg-charcoal/60 p-4 lg:p-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-1 items-center gap-3">
+                  <div className="relative flex-1">
+                    <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35">
+                      search
                     </span>
+                    <input
+                      className="h-11 w-full rounded-xl border border-white/10 bg-background-dark pl-10 pr-3 text-sm text-white placeholder:text-white/30 focus:border-accent focus:outline-none"
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Search template name..."
+                      type="text"
+                      value={query}
+                    />
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-white">
-                      Platform Admin
-                    </p>
-                    <p className="text-[10px] text-white/40">
-                      Superuser Access
-                    </p>
-                  </div>
+                  <select
+                    className="h-11 rounded-xl border border-white/10 bg-background-dark px-3 text-sm text-white focus:border-accent focus:outline-none"
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                    value={statusFilter}>
+                    <option value="all">All status</option>
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                  </select>
+                  <button
+                    className="h-11 rounded-xl border border-white/15 bg-white/5 px-3 text-xs font-bold uppercase tracking-widest text-white/70 transition-colors hover:bg-white/10"
+                    onClick={loadTemplates}
+                    type="button">
+                    Refresh
+                  </button>
                 </div>
-                <button className="w-full py-2 bg-charcoal border border-white/10 rounded-lg text-xs font-bold hover:bg-white/5 transition-all">
-                  Logout
-                </button>
-              </div>
-            </div>
-          </aside>
 
-          <main className="ml-0 flex-1 p-8">
-            <section className="flex flex-col lg:flex-row items-center gap-4 mb-10 bg-white/5 p-4 rounded-2xl border border-white/10">
-              <div className="relative flex-1 w-full">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
-                  search
-                </span>
-                <input
-                  className="w-full bg-charcoal border-white/10 focus:border-accent focus:ring-accent rounded-xl pl-12 text-sm text-white placeholder:text-white/20 h-12"
-                  placeholder="Search templates by name or tag..."
-                  type="text"
-                />
+                <Link
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-accent px-4 text-xs font-black uppercase tracking-wide text-charcoal transition-opacity hover:opacity-90"
+                  to="/admin/rooms/templates">
+                  Create Template
+                </Link>
               </div>
-              <div className="flex items-center gap-3 w-full lg:w-auto">
-                <select className="bg-charcoal border-white/10 text-white/60 text-sm rounded-xl focus:ring-accent focus:border-accent h-12 px-4 flex-1 lg:flex-none lg:w-48">
-                  <option>Venue Type: All</option>
-                  <option>IMAX</option>
-                  <option>Prestige</option>
-                  <option>Outdoor</option>
-                  <option>Boutique</option>
-                </select>
-                <select className="bg-charcoal border-white/10 text-white/60 text-sm rounded-xl focus:ring-accent focus:border-accent h-12 px-4 flex-1 lg:flex-none lg:w-48">
-                  <option>Capacity: All</option>
-                  <option>Small (&lt; 50)</option>
-                  <option>Medium (50 - 200)</option>
-                  <option>Large (200+)</option>
-                </select>
-                <button className="h-12 w-12 flex items-center justify-center bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all">
-                  <span className="material-symbols-outlined text-white/60">
-                    filter_list
-                  </span>
-                </button>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-widest text-white/60">
+                  total: {pagination?.total ?? templates.length}
+                </span>
+                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[10px] uppercase tracking-widest text-emerald-200">
+                  published: {summary.published}
+                </span>
+                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] uppercase tracking-widest text-amber-100">
+                  drafts: {summary.drafts}
+                </span>
               </div>
             </section>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-              <div className="glass-card border border-white/10 rounded-2xl overflow-hidden group hover:border-accent/50 transition-all duration-300">
-                <div className="h-48 bg-charcoal relative flex items-center justify-center p-6 overflow-hidden border-b border-white/10">
-                  <Dots
-                    colsClass="grid-cols-10"
-                    gapClass="gap-1.5"
-                    total={40}
-                    active={Array.from({ length: 20 }, (_, i) => i + 10)}
+            {error ? (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {error}
+              </div>
+            ) : null}
+
+            {isLoading ? (
+              <div className="rounded-2xl border border-white/10 bg-charcoal/50 px-4 py-10 text-center text-sm text-white/50">
+                Loading templates...
+              </div>
+            ) : templates.length ? (
+              <section className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {templates.map((template) => (
+                  <TemplateCard
+                    key={template._id}
+                    isDeleting={deletingTemplateId === template._id}
+                    onDelete={handleDeleteTemplate}
+                    template={template}
                   />
-                  <div className="absolute top-4 left-4">
-                    <span className="px-3 py-1 bg-accent text-charcoal text-[10px] font-black rounded-full uppercase tracking-tighter shadow-lg flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs">
-                        star
-                      </span>{" "}
-                      Popularity High
-                    </span>
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal to-transparent opacity-60" />
-                  <div className="absolute bottom-4 right-4 text-[10px] text-white/40 font-mono uppercase tracking-widest">
-                    v1.2.4-stable
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-xl font-bold group-hover:text-accent transition-colors">
-                        Grand IMAX Theater
-                      </h3>
-                      <p className="text-xs text-white/40">
-                        Large-scale cinematic experience
-                      </p>
-                    </div>
-                    <span className="bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded text-[10px] font-bold">
-                      IMAX
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1">
-                        Capacity
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-accent text-lg">
-                          event_seat
-                        </span>
-                        <span className="text-lg font-black">450</span>
-                      </div>
-                    </div>
-                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1">
-                        Active Events
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-accent text-lg">
-                          confirmation_number
-                        </span>
-                        <span className="text-lg font-black">24</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold py-3 rounded-xl transition-all">
-                      Edit Layout
-                    </button>
-                    <button className="w-12 aspect-square flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white/60 hover:text-white transition-all">
-                      <span className="material-symbols-outlined text-lg">
-                        content_copy
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="glass-card border border-white/10 rounded-2xl overflow-hidden group hover:border-accent/50 transition-all duration-300">
-                <div className="h-48 bg-charcoal relative flex items-center justify-center p-6 overflow-hidden border-b border-white/10">
-                  <Dots
-                    colsClass="grid-cols-8"
-                    gapClass="gap-3"
-                    total={24}
-                    active={Array.from({ length: 24 }, (_, i) => i)}
-                  />
-                  <div className="absolute top-4 left-4">
-                    <span className="px-3 py-1 bg-white/10 text-white/60 text-[10px] font-black rounded-full uppercase tracking-tighter flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs">
-                        trending_up
-                      </span>{" "}
-                      Trending
-                    </span>
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal to-transparent opacity-60" />
-                  <div className="absolute bottom-4 right-4 text-[10px] text-white/40 font-mono uppercase tracking-widest">
-                    v2.0.0-gold
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-xl font-bold group-hover:text-accent transition-colors">
-                        Royal Lounge
-                      </h3>
-                      <p className="text-xs text-white/40">
-                        Luxury reclining suites
-                      </p>
-                    </div>
-                    <span className="bg-accent/10 text-accent border border-accent/30 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest">
-                      Prestige
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1">
-                        Capacity
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-accent text-lg">
-                          king_bed
-                        </span>
-                        <span className="text-lg font-black">48</span>
-                      </div>
-                    </div>
-                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1">
-                        Active Events
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-accent text-lg">
-                          confirmation_number
-                        </span>
-                        <span className="text-lg font-black">12</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold py-3 rounded-xl transition-all">
-                      Edit Layout
-                    </button>
-                    <button className="w-12 aspect-square flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white/60 hover:text-white transition-all">
-                      <span className="material-symbols-outlined text-lg">
-                        content_copy
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="glass-card border border-white/10 rounded-2xl overflow-hidden group hover:border-accent/50 transition-all duration-300">
-                <div className="h-48 bg-charcoal relative flex items-center justify-center p-6 overflow-hidden border-b border-white/10">
-                  <Dots
-                    colsClass="grid-cols-6"
-                    gapClass="gap-4"
-                    total={12}
-                    active={Array.from({ length: 12 }, (_, i) => i)}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal to-transparent opacity-60" />
-                  <div className="absolute bottom-4 right-4 text-[10px] text-white/40 font-mono uppercase tracking-widest">
-                    v0.9.1-beta
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-xl font-bold group-hover:text-accent transition-colors">
-                        Micro Boutique
-                      </h3>
-                      <p className="text-xs text-white/40">
-                        Private screening studio
-                      </p>
-                    </div>
-                    <span className="bg-white/5 text-white/60 border border-white/10 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest">
-                      Boutique
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1">
-                        Capacity
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-accent text-lg">
-                          chair
-                        </span>
-                        <span className="text-lg font-black">20</span>
-                      </div>
-                    </div>
-                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1">
-                        Active Events
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-accent text-lg">
-                          confirmation_number
-                        </span>
-                        <span className="text-lg font-black">4</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold py-3 rounded-xl transition-all">
-                      Edit Layout
-                    </button>
-                    <button className="w-12 aspect-square flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white/60 hover:text-white transition-all">
-                      <span className="material-symbols-outlined text-lg">
-                        content_copy
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="glass-card border border-white/10 rounded-2xl overflow-hidden group hover:border-accent/50 transition-all duration-300">
-                <div className="h-48 bg-charcoal relative flex items-center justify-center p-6 overflow-hidden border-b border-white/10">
-                  <div className="flex flex-col items-center gap-2 opacity-60">
-                    <div className="flex gap-1.5">
-                      {Array.from({ length: 7 }).map((_, i) => (
-                        <div key={`row1-${i}`} className="minimap-dot" />
-                      ))}
-                    </div>
-                    <div className="flex gap-1.5">
-                      {Array.from({ length: 7 }).map((_, i) => (
-                        <div key={`row2-${i}`} className="minimap-dot" />
-                      ))}
-                    </div>
-                    <div className="flex gap-4 mt-2">
-                      {Array.from({ length: 3 }).map((_, i) => (
-                        <div key={`row3-${i}`} className="minimap-dot active" />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="absolute top-4 left-4">
-                    <span className="px-3 py-1 bg-accent text-charcoal text-[10px] font-black rounded-full uppercase tracking-tighter flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs">
-                        verified
-                      </span>{" "}
-                      Certified
-                    </span>
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal to-transparent opacity-60" />
-                  <div className="absolute bottom-4 right-4 text-[10px] text-white/40 font-mono uppercase tracking-widest">
-                    v3.1.0-master
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="text-xl font-bold group-hover:text-accent transition-colors">
-                        Starry Garden
-                      </h3>
-                      <p className="text-xs text-white/40">
-                        Open-air moonlight cinema
-                      </p>
-                    </div>
-                    <span className="bg-green-900/20 text-green-400 border border-green-500/30 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest">
-                      Outdoor
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1">
-                        Capacity
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-accent text-lg">
-                          wb_sunny
-                        </span>
-                        <span className="text-lg font-black">250</span>
-                      </div>
-                    </div>
-                    <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                      <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1">
-                        Active Events
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-accent text-lg">
-                          confirmation_number
-                        </span>
-                        <span className="text-lg font-black">8</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold py-3 rounded-xl transition-all">
-                      Edit Layout
-                    </button>
-                    <button className="w-12 aspect-square flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white/60 hover:text-white transition-all">
-                      <span className="material-symbols-outlined text-lg">
-                        content_copy
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <Link
-                to="/admin/rooms/templates"
-                className="border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-4 p-8 hover:border-accent/50 hover:bg-accent/5 transition-all group">
-                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-accent/20 transition-all">
-                  <span className="material-symbols-outlined text-4xl text-white/20 group-hover:text-accent">
-                    add
-                  </span>
-                </div>
-                <div className="text-center">
-                  <h3 className="font-bold text-lg text-white/40 group-hover:text-white">
-                    Create Template
-                  </h3>
-                  <p className="text-xs text-white/20 group-hover:text-white/40">
-                    Draft a new seating blueprint
-                  </p>
-                </div>
-              </Link>
-            </div>
-
-            <footer className="mt-12 flex items-center justify-between border-t border-white/10 pt-8">
-              <p className="text-xs text-white/40">
-                Showing 4 of 48 total venue templates. All templates are
-                synchronized with the{" "}
-                <span className="text-accent">Global Master Sync</span> service.
-              </p>
-              <div className="flex items-center gap-1">
-                <button className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 hover:text-white">
-                  <span className="material-symbols-outlined text-sm">
-                    chevron_left
-                  </span>
-                </button>
-                <button className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-charcoal font-bold text-xs">
-                  1
-                </button>
-                <button className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 hover:text-white font-bold text-xs">
-                  2
-                </button>
-                <button className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 hover:text-white font-bold text-xs">
-                  3
-                </button>
-                <button className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 hover:text-white">
-                  <span className="material-symbols-outlined text-sm">
-                    chevron_right
-                  </span>
-                </button>
-              </div>
-            </footer>
+                ))}
+              </section>
+            ) : (
+              <section className="rounded-2xl border border-dashed border-white/15 bg-charcoal/30 px-6 py-12 text-center">
+                <p className="text-lg font-bold text-white/70">
+                  No templates found
+                </p>
+                <p className="mt-2 text-sm text-white/45">
+                  Publish one from the Room Template editor and it will appear
+                  here.
+                </p>
+                <Link
+                  className="mt-5 inline-flex items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-black uppercase tracking-wide text-charcoal transition-opacity hover:opacity-90"
+                  to="/admin/rooms/templates">
+                  Go To Editor
+                </Link>
+              </section>
+            )}
           </main>
         </AdminPageFrame>
       </div>

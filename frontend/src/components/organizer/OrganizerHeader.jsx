@@ -40,15 +40,15 @@ export default function OrganizerHeader({
   return (
     <header className="mb-8 flex items-center justify-between gap-4">
       <div className="flex items-center gap-3">
-        <button
-          aria-label="Toggle sidebar"
-          className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-white/80 transition-colors hover:bg-white/10"
-          onClick={onToggleSidebar}
-          type="button">
-          <span className="material-symbols-outlined text-xl">
-            {isSidebarOpen ? "close" : "menu"}
-          </span>
-        </button>
+        {!isSidebarOpen ? (
+          <button
+            aria-label="Open sidebar"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/80 transition-colors hover:bg-white/10"
+            onClick={onToggleSidebar}
+            type="button">
+            <span className="material-symbols-outlined text-xl">menu</span>
+          </button>
+        ) : null}
         <div>
           <h2 className="text-3xl font-black text-white">{title}</h2>
           <p className="text-sm font-medium text-white/40">{subtitle}</p>
