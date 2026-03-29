@@ -18,6 +18,10 @@ const protect = async (req, res, next) => {
           .json({ message: "Not authorized, user not found" });
       }
 
+      if (req.user.isBlocked) {
+        return res.status(403).json({ message: "Account is suspended" });
+      }
+
       if (
         req.user.role === "organizer" &&
         req.user.organizerStatus === "pending_validation"

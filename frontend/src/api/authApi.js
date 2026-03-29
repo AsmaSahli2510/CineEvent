@@ -183,6 +183,128 @@ export const getPendingOrganizersAdmin = async () => {
   return data.organizers || [];
 };
 
+export const getAdminUsers = async ({
+  q,
+  role,
+  status,
+  excludeAdmins,
+  page = 1,
+  limit = 12,
+} = {}) => {
+  const params = new URLSearchParams();
+
+  if (q) {
+    params.set("q", q);
+  }
+  if (role && role !== "all") {
+    params.set("role", role);
+  }
+  if (status && status !== "all") {
+    params.set("status", status);
+  }
+  if (excludeAdmins === true) {
+    params.set("excludeAdmins", "true");
+  }
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+
+  const response = await fetch(
+    `${API_BASE_URL}/auth/admin/users?${params.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+    },
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to fetch users");
+  }
+
+  return data;
+};
+
+export const promoteUserToAdmin = async (userId) => {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/admin/users/${userId}/promote-admin`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+    },
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to promote user to admin");
+  }
+
+  return data;
+};
+
+export const updateUserRoleAdmin = async (userId, role) => {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/admin/users/${userId}/role`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+      body: JSON.stringify({ role }),
+    },
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to update user role");
+  }
+
+  return data;
+};
+
+export const toggleUserBlockAdmin = async (userId) => {
+  const response = await fetch(
+    `${API_BASE_URL}/auth/admin/users/${userId}/block`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+    },
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to update suspension state");
+  }
+
+  return data;
+};
+
+export const deleteUserAdmin = async (userId) => {
+  const response = await fetch(`${API_BASE_URL}/auth/admin/users/${userId}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to delete user");
+  }
+
+  return data;
+};
+
 export const approveOrganizerAdmin = async (
   organizerId,
   { checklist, internalNote } = {},

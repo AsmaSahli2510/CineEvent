@@ -130,9 +130,7 @@ export default function OrganizerSidebar({ isOpen, onClose }) {
                   <Link
                     key={item.to}
                     className={`flex items-center rounded-xl py-3 text-sm font-bold transition-all ${
-                      isCollapsed
-                        ? "justify-center px-2"
-                        : "gap-4 px-4"
+                      isCollapsed ? "justify-center px-2" : "gap-4 px-4"
                     } ${
                       active
                         ? "border border-primary/30 bg-primary/20 text-accent"
@@ -150,7 +148,8 @@ export default function OrganizerSidebar({ isOpen, onClose }) {
             </nav>
           </div>
 
-          <div className={`mt-auto border-t border-white/5 ${isCollapsed ? "p-3" : "p-8"}`}>
+          <div
+            className={`mt-auto border-t border-white/5 ${isCollapsed ? "p-3" : "p-8"}`}>
             {!isCollapsed ? (
               <h3 className="mb-6 text-xs font-bold uppercase tracking-widest text-white/40">
                 Organizer Focus

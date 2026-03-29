@@ -89,6 +89,7 @@ const buildAuthResponse = (user) => ({
   email: user.email,
   role: user.role,
   avatar: user.avatar,
+  isBlocked: user.isBlocked,
   organizerStatus: user.organizerStatus,
   organizerProfile: user.organizerProfile,
   token: generateToken(user._id),
@@ -99,9 +100,13 @@ const buildPendingOrganizerResponse = (user) => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  isBlocked: user.isBlocked,
   organizerStatus: user.organizerStatus,
   organizerProfile: user.organizerProfile,
 });
+
+const escapeRegex = (value = "") =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // @desc    Register a new spectator
 // @route   POST /api/auth/register
@@ -230,6 +235,10 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
+    if (user.isBlocked) {
+      return res.status(403).json({ message: "Your account is suspended" });
+    }
+
     if (
       user.role === "organizer" &&
       user.organizerStatus === "pending_validation"
@@ -292,6 +301,10 @@ const googleAuth = async (req, res) => {
       }
 
       await user.save();
+
+      if (user.isBlocked) {
+        return res.status(403).json({ message: "Your account is suspended" });
+      }
     } else {
       user = await User.create({
         name: name || email.split("@")[0],
@@ -493,6 +506,220 @@ const getPendingOrganizers = async (req, res) => {
   }
 };
 
+// @desc    Get users for admin management list
+// @route   GET /api/auth/admin/users
+// @access  Private (Admin only)
+const getAdminUsers = async (req, res) => {
+  try {
+    const {
+      q = "",
+      role = "all",
+      status = "all",
+      excludeAdmins = "false",
+      page = 1,
+      limit = 12,
+    } = req.query;
+
+    const parsedPage = Math.max(1, Number(page) || 1);
+    const parsedLimit = Math.min(50, Math.max(1, Number(limit) || 12));
+
+    const filters = {};
+
+    if (["spectator", "organizer", "admin"].includes(role)) {
+      filters.role = role;
+    } else if (String(excludeAdmins).toLowerCase() === "true") {
+      filters.role = { $ne: "admin" };
+    }
+
+    if (status === "pending") {
+      filters.role = "organizer";
+      filters.organizerStatus = "pending_validation";
+    } else if (status === "rejected") {
+      filters.role = "organizer";
+      filters.organizerStatus = "rejected";
+    } else if (status === "active") {
+      filters.organizerStatus = { $nin: ["pending_validation", "rejected"] };
+    }
+
+    const trimmedQuery = String(q).trim();
+    if (trimmedQuery) {
+      const safeRegex = new RegExp(escapeRegex(trimmedQuery), "i");
+      filters.$or = [{ name: safeRegex }, { email: safeRegex }];
+    }
+
+    const total = await User.countDocuments(filters);
+    const totalPages = Math.max(1, Math.ceil(total / parsedLimit));
+    const safePage = Math.min(parsedPage, totalPages);
+    const skip = (safePage - 1) * parsedLimit;
+
+    const users = await User.find(filters)
+      .select("name email role organizerStatus isBlocked createdAt avatar")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parsedLimit);
+
+    res.json({
+      users,
+      pagination: {
+        total,
+        page: safePage,
+        pages: totalPages,
+        limit: parsedLimit,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Promote user to admin role
+// @route   POST /api/auth/admin/users/:userId/promote-admin
+// @access  Private (Admin only)
+const promoteUserToAdmin = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.role === "admin") {
+      return res.status(400).json({ message: "User is already an admin" });
+    }
+
+    user.role = "admin";
+    await user.save();
+
+    res.json({
+      message: "User promoted to admin successfully",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isBlocked: user.isBlocked,
+        organizerStatus: user.organizerStatus,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update user role
+// @route   PATCH /api/auth/admin/users/:userId/role
+// @access  Private (Admin only)
+const updateUserRoleAdmin = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    if (!["spectator", "organizer", "admin"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    if (String(req.user._id) === String(userId) && role !== "admin") {
+      return res.status(400).json({
+        message: "You cannot remove your own admin role",
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.role = role;
+    if (role !== "organizer") {
+      user.organizerStatus = "none";
+    }
+    await user.save();
+
+    res.json({
+      message: "User role updated successfully",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isBlocked: user.isBlocked,
+        organizerStatus: user.organizerStatus,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Toggle user suspension state
+// @route   PATCH /api/auth/admin/users/:userId/block
+// @access  Private (Admin only)
+const toggleUserBlockAdmin = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (String(req.user._id) === String(userId)) {
+      return res.status(400).json({
+        message: "You cannot suspend your own account",
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.isBlocked = !user.isBlocked;
+    await user.save();
+
+    res.json({
+      message: user.isBlocked
+        ? "User suspended successfully"
+        : "User unsuspended successfully",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isBlocked: user.isBlocked,
+        organizerStatus: user.organizerStatus,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete user
+// @route   DELETE /api/auth/admin/users/:userId
+// @access  Private (Admin only)
+const deleteUserAdmin = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (String(req.user._id) === String(userId)) {
+      return res.status(400).json({
+        message: "You cannot delete your own account",
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await User.deleteOne({ _id: userId });
+
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Approve organizer and send approval email with verification link
 // @route   POST /api/auth/admin/approve-organizer/:organizerId
 // @access  Private (Admin only)
@@ -661,6 +888,11 @@ module.exports = {
   resetPassword,
   getProfile,
   updateProfile,
+  getAdminUsers,
+  promoteUserToAdmin,
+  updateUserRoleAdmin,
+  toggleUserBlockAdmin,
+  deleteUserAdmin,
   getPendingOrganizers,
   approveOrganizerAndSendEmail,
   rejectOrganizerAndSendEmail,

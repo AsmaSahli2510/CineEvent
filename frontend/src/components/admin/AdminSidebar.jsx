@@ -49,7 +49,9 @@ export default function AdminSidebar({ isOpen, onClose }) {
       try {
         const organizers = await getPendingOrganizersAdmin();
         if (isMounted) {
-          setPendingOrganizerCount(Array.isArray(organizers) ? organizers.length : 0);
+          setPendingOrganizerCount(
+            Array.isArray(organizers) ? organizers.length : 0,
+          );
         }
       } catch {
         if (isMounted) {
@@ -123,9 +125,7 @@ export default function AdminSidebar({ isOpen, onClose }) {
                   <Link
                     key={item.to}
                     className={`flex items-center rounded-lg py-2.5 text-[13px] font-bold transition-all ${
-                      isCollapsed
-                        ? "justify-center px-2"
-                        : "gap-3 px-3"
+                      isCollapsed ? "justify-center px-2" : "gap-3 px-3"
                     } ${
                       active
                         ? "border border-primary/30 bg-primary/20 text-accent"
@@ -143,7 +143,8 @@ export default function AdminSidebar({ isOpen, onClose }) {
             </nav>
           </div>
 
-          <div className={`mt-auto border-t border-white/5 ${isCollapsed ? "p-3" : "p-6"}`}>
+          <div
+            className={`mt-auto border-t border-white/5 ${isCollapsed ? "p-3" : "p-6"}`}>
             {!isCollapsed ? (
               <h3 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-white/40">
                 Moderation Alerts
@@ -167,7 +168,9 @@ export default function AdminSidebar({ isOpen, onClose }) {
                       <p className="text-[11px] font-bold text-white">
                         12 Flagged Comments
                       </p>
-                      <p className="text-[9px] text-white/40">Requires review</p>
+                      <p className="text-[9px] text-white/40">
+                        Requires review
+                      </p>
                     </div>
                     <span className="material-symbols-outlined text-xs text-white/40">
                       chevron_right

@@ -93,6 +93,10 @@ const userSchema = new mongoose.Schema(
       enum: ["local", "google"],
       default: "local",
     },
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
     passwordResetToken: {
       type: String,
       default: null,

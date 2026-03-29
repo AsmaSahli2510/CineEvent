@@ -1,152 +1,423 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
 import AdminPageFrame from "../../components/admin/AdminPageFrame";
+import {
+  deleteUserAdmin,
+  getAdminUsers,
+  promoteUserToAdmin,
+  toggleUserBlockAdmin,
+  updateUserRoleAdmin,
+} from "../../api/authApi";
+
+const PAGE_SIZE = 12;
+
+function formatDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  try {
+    return new Date(value).toLocaleDateString();
+  } catch {
+    return "-";
+  }
+}
+
+function roleBadgeClass(role) {
+  if (role === "organizer") {
+    return "bg-accent/10 text-accent border-accent/20";
+  }
+  if (role === "admin") {
+    return "bg-emerald-500/15 text-emerald-200 border-emerald-400/30";
+  }
+  return "bg-primary/20 text-white/80 border-primary/20";
+}
+
+function userStatus(user) {
+  if (user?.isBlocked) {
+    return {
+      label: "Suspended",
+      tone: "text-yellow-500",
+      dot: "bg-yellow-500",
+    };
+  }
+
+  if (
+    user?.role === "organizer" &&
+    user?.organizerStatus === "pending_validation"
+  ) {
+    return {
+      label: "Pending",
+      tone: "text-yellow-400",
+      dot: "bg-yellow-400",
+    };
+  }
+
+  if (user?.role === "organizer" && user?.organizerStatus === "rejected") {
+    return {
+      label: "Rejected",
+      tone: "text-red-400",
+      dot: "bg-red-400",
+    };
+  }
+
+  return {
+    label: "Active",
+    tone: "text-green-400",
+    dot: "bg-green-400",
+  };
+}
+
+function initials(name) {
+  const source = String(name || "").trim();
+  if (!source) {
+    return "US";
+  }
+
+  const parts = source
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "");
+
+  return parts.join("") || "US";
+}
 
 export default function UserManagementPage() {
+  const [users, setUsers] = useState([]);
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [admins, setAdmins] = useState([]);
+  const [candidateUsers, setCandidateUsers] = useState([]);
+  const [candidateQuery, setCandidateQuery] = useState("");
+  const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const [isModalLoading, setIsModalLoading] = useState(false);
+  const [isPromoting, setIsPromoting] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [modalError, setModalError] = useState("");
+  const [rowActionLoadingId, setRowActionLoadingId] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const fetchUsers = async (targetPage = pagination.page) => {
+    try {
+      setIsLoading(true);
+      setError("");
+
+      const result = await getAdminUsers({
+        q: debouncedQuery || undefined,
+        role: roleFilter,
+        status: statusFilter,
+        excludeAdmins: true,
+        page: targetPage,
+        limit: PAGE_SIZE,
+      });
+
+      setUsers(Array.isArray(result?.users) ? result.users : []);
+      setPagination((prev) => ({
+        ...prev,
+        ...(result?.pagination || {}),
+      }));
+    } catch (fetchError) {
+      setUsers([]);
+      setError(fetchError.message || "Failed to load users");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, [debouncedQuery, pagination.page, roleFilter, statusFilter]);
+
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, page: 1 }));
+  }, [debouncedQuery, roleFilter, statusFilter]);
+
+  const loadInviteModalData = async (searchText = "") => {
+    try {
+      setIsModalLoading(true);
+      setModalError("");
+
+      const [adminsResult, candidatesResult] = await Promise.all([
+        getAdminUsers({ role: "admin", page: 1, limit: 50 }),
+        getAdminUsers({
+          q: searchText || undefined,
+          excludeAdmins: true,
+          page: 1,
+          limit: 25,
+        }),
+      ]);
+
+      setAdmins(Array.isArray(adminsResult?.users) ? adminsResult.users : []);
+      setCandidateUsers(
+        Array.isArray(candidatesResult?.users) ? candidatesResult.users : [],
+      );
+
+      if (!selectedCandidateId && candidatesResult?.users?.length) {
+        setSelectedCandidateId(candidatesResult.users[0]._id);
+      }
+    } catch (loadError) {
+      setModalError(
+        loadError.message || "Failed to load admin management data",
+      );
+    } finally {
+      setIsModalLoading(false);
+    }
+  };
+
+  const openInviteModal = async () => {
+    setIsInviteModalOpen(true);
+    setModalMessage("");
+    setModalError("");
+    setCandidateQuery("");
+    setSelectedCandidateId("");
+    await loadInviteModalData();
+  };
+
+  const handlePromote = async () => {
+    if (!selectedCandidateId) {
+      setModalError("Please select a user to promote.");
+      return;
+    }
+
+    try {
+      setIsPromoting(true);
+      setModalError("");
+      setModalMessage("");
+
+      await promoteUserToAdmin(selectedCandidateId);
+      setModalMessage("User promoted to admin successfully.");
+
+      await Promise.all([
+        fetchUsers(),
+        loadInviteModalData(candidateQuery.trim()),
+      ]);
+    } catch (promoteError) {
+      setModalError(promoteError.message || "Failed to promote user.");
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  const handleChangeRole = async (user) => {
+    const nextRole = user.role === "organizer" ? "spectator" : "organizer";
+    const confirmed = window.confirm(
+      `Change ${user.name} role from ${user.role} to ${nextRole}?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRowActionLoadingId(user._id);
+      setError("");
+      await updateUserRoleAdmin(user._id, nextRole);
+      await fetchUsers();
+    } catch (actionError) {
+      setError(actionError.message || "Failed to update role");
+    } finally {
+      setRowActionLoadingId("");
+    }
+  };
+
+  const handleToggleBlock = async (user) => {
+    const actionLabel = user.isBlocked ? "unsuspend" : "suspend";
+    const confirmed = window.confirm(
+      `Are you sure you want to ${actionLabel} ${user.name}?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRowActionLoadingId(user._id);
+      setError("");
+      await toggleUserBlockAdmin(user._id);
+      await fetchUsers();
+    } catch (actionError) {
+      setError(actionError.message || "Failed to update suspension state");
+    } finally {
+      setRowActionLoadingId("");
+    }
+  };
+
+  const handleDeleteUser = async (user) => {
+    const confirmed = window.confirm(
+      `Delete ${user.name} (${user.email})? This action cannot be undone.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRowActionLoadingId(user._id);
+      setError("");
+      await deleteUserAdmin(user._id);
+      await fetchUsers();
+    } catch (actionError) {
+      setError(actionError.message || "Failed to delete user");
+    } finally {
+      setRowActionLoadingId("");
+    }
+  };
+
+  const canGoPrev = pagination.page > 1;
+  const canGoNext = pagination.page < pagination.pages;
+
+  const selectedCandidate = useMemo(
+    () =>
+      candidateUsers.find((user) => user._id === selectedCandidateId) || null,
+    [candidateUsers, selectedCandidateId],
+  );
+
   return (
     <>
       <style>{`
-				.user-management-page {
-					font-family: 'Spline Sans', sans-serif;
-				}
+        .user-management-page {
+          font-family: 'Spline Sans', sans-serif;
+        }
 
-				.user-management-page .custom-scrollbar::-webkit-scrollbar {
-					width: 6px;
-				}
+        .user-management-page .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
 
-				.user-management-page .custom-scrollbar::-webkit-scrollbar-track {
-					background: transparent;
-				}
+        .user-management-page .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
 
-				.user-management-page .custom-scrollbar::-webkit-scrollbar-thumb {
-					background: #800020;
-					border-radius: 10px;
-				}
-			`}</style>
+        .user-management-page .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #800020;
+          border-radius: 10px;
+        }
+      `}</style>
 
-      <div className="user-management-page bg-background-dark text-white min-h-screen">
+      <div className="user-management-page min-h-screen bg-background-dark text-white">
         <AdminPageFrame
           title="User & Role Management"
           subtitle="Manage permissions and participant accounts">
-          <header className="hidden sticky top-0 z-50 w-full border-b border-accent/20 bg-background-dark/95 backdrop-blur-md px-6 md:px-20 py-4">
-            <div className="max-w-[1440px] mx-auto flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="text-accent">
-                  <span className="material-symbols-outlined text-4xl">
-                    movie_filter
-                  </span>
-                </div>
-                <h1 className="text-2xl font-black tracking-tighter text-white">
-                  CINE<span className="text-accent">ADMIN</span>
-                </h1>
-              </div>
-
-              <nav className="hidden md:flex items-center gap-10">
-                <Link
-                  className="text-white/60 hover:text-accent font-medium text-sm transition-colors"
-                  to="/admin/dashboard">
-                  Dashboard
-                </Link>
-                <Link
-                  className="text-white hover:text-accent font-medium text-sm transition-colors border-b-2 border-accent pb-1"
-                  to="/admin/users">
-                  Users
-                </Link>
-                <Link
-                  className="text-white/60 hover:text-accent font-medium text-sm transition-colors"
-                  to="/admin/events/validation">
-                  Events
-                </Link>
-                <Link
-                  className="text-white/60 hover:text-accent font-medium text-sm transition-colors"
-                  to="/admin/revenue">
-                  Revenue
-                </Link>
-              </nav>
-
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-3 mr-4">
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-xs font-bold">
-                    AD
-                  </div>
-                  <span className="text-sm font-medium">Administrator</span>
-                </div>
-                <button className="text-white/60 hover:text-white">
-                  <span className="material-symbols-outlined">settings</span>
-                </button>
-              </div>
-            </div>
-          </header>
-
           <main className="w-full max-w-[1440px] px-6 py-10 md:px-20">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 pb-10 border-b border-white/10">
+            <div className="mb-10 flex flex-col justify-between gap-6 border-b border-white/10 pb-10 md:flex-row md:items-center">
               <div className="flex gap-3">
-                <button className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-sm font-bold">
+                <button
+                  className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-bold text-white/50"
+                  disabled
+                  type="button">
                   <span className="material-symbols-outlined text-sm">
                     download
                   </span>
                   Export CSV
                 </button>
-                <button className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all text-sm font-bold shadow-lg shadow-primary/20">
+                <button
+                  className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-opacity hover:opacity-90"
+                  onClick={openInviteModal}
+                  type="button">
                   <span className="material-symbols-outlined text-sm">
                     person_add
                   </span>
-                  Invite User
+                  Add Admin
                 </button>
               </div>
             </div>
 
-            <div className="bg-charcoal/50 border border-white/10 rounded-2xl p-6 mb-8">
-              <div className="flex flex-col lg:flex-row gap-4">
+            <div className="mb-8 rounded-2xl border border-white/10 bg-charcoal/50 p-6">
+              <div className="flex flex-col gap-4 lg:flex-row">
                 <div className="relative flex-grow">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
                     search
                   </span>
                   <input
-                    className="w-full bg-white/5 border-white/10 rounded-xl pl-12 pr-4 py-3 focus:ring-accent focus:border-accent text-sm text-white placeholder:text-white/40 transition-all"
-                    placeholder="Search by name, email, or ID..."
+                    className="w-full rounded-xl border-white/10 bg-white/5 py-3 pl-12 pr-4 text-sm text-white placeholder:text-white/40 transition-all focus:border-accent focus:ring-accent"
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search by name or email..."
                     type="text"
+                    value={query}
                   />
                 </div>
 
                 <div className="flex flex-wrap gap-4">
                   <div className="relative min-w-[160px]">
-                    <select className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 focus:ring-accent focus:border-accent text-sm text-white appearance-none">
-                      <option className="bg-charcoal">All Roles</option>
-                      <option className="bg-charcoal">Organizers</option>
-                      <option className="bg-charcoal">Spectators</option>
-                      <option className="bg-charcoal">Editors</option>
+                    <select
+                      className="w-full appearance-none rounded-xl border-white/10 bg-white/5 px-4 py-3 text-sm text-white focus:border-accent focus:ring-accent"
+                      onChange={(event) => setRoleFilter(event.target.value)}
+                      value={roleFilter}>
+                      <option className="bg-charcoal" value="all">
+                        All Roles
+                      </option>
+                      <option className="bg-charcoal" value="organizer">
+                        Organizers
+                      </option>
+                      <option className="bg-charcoal" value="spectator">
+                        Spectators
+                      </option>
                     </select>
                   </div>
                   <div className="relative min-w-[160px]">
-                    <select className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 focus:ring-accent focus:border-accent text-sm text-white appearance-none">
-                      <option className="bg-charcoal">Account Status</option>
-                      <option className="bg-charcoal text-green-400">
+                    <select
+                      className="w-full appearance-none rounded-xl border-white/10 bg-white/5 px-4 py-3 text-sm text-white focus:border-accent focus:ring-accent"
+                      onChange={(event) => setStatusFilter(event.target.value)}
+                      value={statusFilter}>
+                      <option className="bg-charcoal" value="all">
+                        Account Status
+                      </option>
+                      <option
+                        className="bg-charcoal text-green-400"
+                        value="active">
                         Active
                       </option>
-                      <option className="bg-charcoal text-yellow-400">
-                        Suspended
+                      <option
+                        className="bg-charcoal text-yellow-400"
+                        value="pending">
+                        Pending
                       </option>
-                      <option className="bg-charcoal text-red-400">
-                        Banned
+                      <option
+                        className="bg-charcoal text-red-400"
+                        value="rejected">
+                        Rejected
                       </option>
                     </select>
                   </div>
-                  <button className="flex items-center gap-2 px-6 py-3 bg-accent text-charcoal font-bold rounded-xl hover:opacity-90 transition-all">
+                  <button
+                    className="flex items-center gap-2 rounded-xl bg-accent px-6 py-3 font-bold text-charcoal transition-all hover:opacity-90"
+                    onClick={() => {
+                      setQuery("");
+                      setRoleFilter("all");
+                      setStatusFilter("all");
+                    }}
+                    type="button">
                     <span className="material-symbols-outlined text-sm">
-                      filter_alt
+                      filter_alt_off
                     </span>
-                    Filters
+                    Clear
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="bg-charcoal/30 border border-white/5 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left border-collapse">
+            {error ? (
+              <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {error}
+              </div>
+            ) : null}
+
+            <div className="overflow-hidden rounded-2xl border border-white/5 bg-charcoal/30">
+              <div className="custom-scrollbar overflow-x-auto">
+                <table className="w-full border-collapse text-left">
                   <thead>
-                    <tr className="bg-white/5 border-b border-white/10">
+                    <tr className="border-b border-white/10 bg-white/5">
                       <th className="px-6 py-5 text-xs font-bold uppercase tracking-widest text-accent">
                         User Details
                       </th>
@@ -159,257 +430,149 @@ export default function UserManagementPage() {
                       <th className="px-6 py-5 text-xs font-bold uppercase tracking-widest text-accent">
                         Status
                       </th>
-                      <th className="px-6 py-5 text-xs font-bold uppercase tracking-widest text-accent text-right">
+                      <th className="px-6 py-5 text-right text-xs font-bold uppercase tracking-widest text-accent">
                         Actions
                       </th>
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-white/5">
-                    <tr className="hover:bg-white/5 transition-colors group">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">
-                            <span className="material-symbols-outlined text-white/40">
-                              person
-                            </span>
-                          </div>
-                          <div>
-                            <div className="font-bold text-white">
-                              Julianne Moore
-                            </div>
-                            <div className="text-xs text-white/40">
-                              j.moore@cinemail.com
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase bg-accent/10 text-accent border border-accent/20">
-                          Organizer
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-sm text-white/60">
-                        Oct 12, 2023
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-2 text-green-400">
-                          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                          <span className="text-xs font-bold">Active</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-accent transition-all group-hover:visible"
-                            title="Change Role">
-                            <span className="material-symbols-outlined text-xl">
-                              manage_accounts
-                            </span>
-                          </button>
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-yellow-500 transition-all"
-                            title="Suspend">
-                            <span className="material-symbols-outlined text-xl">
-                              block
-                            </span>
-                          </button>
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-red-500 transition-all"
-                            title="Delete">
-                            <span className="material-symbols-outlined text-xl">
-                              delete
-                            </span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-
-                    <tr className="hover:bg-white/5 transition-colors group">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10 text-accent font-bold">
-                            AB
-                          </div>
-                          <div>
-                            <div className="font-bold text-white">
-                              Alexander Bennett
-                            </div>
-                            <div className="text-xs text-white/40">
-                              a.bennett@spectator.net
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase bg-primary/20 text-white/80 border border-primary/20">
-                          Spectator
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-sm text-white/60">
-                        Nov 05, 2023
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-2 text-white/40">
-                          <span className="w-2 h-2 rounded-full bg-white/20" />
-                          <span className="text-xs font-bold">Inactive</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-accent transition-all"
-                            title="Change Role">
-                            <span className="material-symbols-outlined text-xl">
-                              manage_accounts
-                            </span>
-                          </button>
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-yellow-500 transition-all"
-                            title="Suspend">
-                            <span className="material-symbols-outlined text-xl">
-                              block
-                            </span>
-                          </button>
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-red-500 transition-all"
-                            title="Delete">
-                            <span className="material-symbols-outlined text-xl">
-                              delete
-                            </span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-
-                    <tr className="hover:bg-white/5 transition-colors group bg-yellow-400/5">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">
-                            <span className="material-symbols-outlined text-white/40">
-                              person
-                            </span>
-                          </div>
-                          <div>
-                            <div className="font-bold text-white">
-                              Isabella Thorne
-                            </div>
-                            <div className="text-xs text-white/40">
-                              isa.thorne@events.com
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase bg-accent/10 text-accent border border-accent/20">
-                          Organizer
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-sm text-white/60">
-                        Jan 22, 2024
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-2 text-yellow-500">
-                          <span className="w-2 h-2 rounded-full bg-yellow-500" />
-                          <span className="text-xs font-bold">Suspended</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center justify-end gap-2">
-                          <button className="p-2 bg-yellow-500 text-charcoal rounded-lg font-bold text-xs px-3 py-1 hover:bg-yellow-400 transition-all">
-                            Lift Suspension
-                          </button>
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-red-500 transition-all"
-                            title="Delete">
-                            <span className="material-symbols-outlined text-xl">
-                              delete
-                            </span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-
-                    <tr className="hover:bg-white/5 transition-colors group border-b-0">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-white/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-white/10">
-                            <span className="material-symbols-outlined text-white/40">
-                              person
-                            </span>
-                          </div>
-                          <div>
-                            <div className="font-bold text-white">
-                              Dominic Toretto
-                            </div>
-                            <div className="text-xs text-white/40">
-                              fast@famiglia.it
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase bg-primary/20 text-white/80 border border-primary/20">
-                          Spectator
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-sm text-white/60">
-                        Feb 02, 2024
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-2 text-green-400">
-                          <span className="w-2 h-2 rounded-full bg-green-400" />
-                          <span className="text-xs font-bold">Active</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-accent transition-all"
-                            title="Change Role">
-                            <span className="material-symbols-outlined text-xl">
-                              manage_accounts
-                            </span>
-                          </button>
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-yellow-500 transition-all"
-                            title="Suspend">
-                            <span className="material-symbols-outlined text-xl">
-                              block
-                            </span>
-                          </button>
-                          <button
-                            className="p-2 hover:bg-white/10 rounded-lg text-white/40 hover:text-red-500 transition-all"
-                            title="Delete">
-                            <span className="material-symbols-outlined text-xl">
-                              delete
-                            </span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                    {isLoading ? (
+                      <tr>
+                        <td
+                          className="px-6 py-8 text-sm text-white/50"
+                          colSpan={5}>
+                          Loading users...
+                        </td>
+                      </tr>
+                    ) : users.length ? (
+                      users.map((user) => {
+                        const status = userStatus(user);
+                        return (
+                          <tr
+                            className="group transition-colors hover:bg-white/5"
+                            key={user._id}>
+                            <td className="px-6 py-5">
+                              <div className="flex items-center gap-4">
+                                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-xs font-bold text-accent">
+                                  {initials(user.name)}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-white">
+                                    {user.name}
+                                  </div>
+                                  <div className="text-xs text-white/40">
+                                    {user.email}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-5">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase ${roleBadgeClass(
+                                  user.role,
+                                )}`}>
+                                {user.role}
+                              </span>
+                            </td>
+                            <td className="px-6 py-5 text-sm text-white/60">
+                              {formatDate(user.createdAt)}
+                            </td>
+                            <td className="px-6 py-5">
+                              <div
+                                className={`flex items-center gap-2 ${status.tone}`}>
+                                <span
+                                  className={`h-2 w-2 rounded-full ${status.dot}`}
+                                />
+                                <span className="text-xs font-bold">
+                                  {status.label}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-5">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  className="rounded-lg p-2 text-white/40 transition-all hover:bg-white/10 hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+                                  disabled={rowActionLoadingId === user._id}
+                                  onClick={() => handleChangeRole(user)}
+                                  title="Switch between organizer and spectator"
+                                  type="button">
+                                  <span className="material-symbols-outlined text-xl">
+                                    manage_accounts
+                                  </span>
+                                </button>
+                                <button
+                                  className="rounded-lg p-2 text-white/40 transition-all hover:bg-white/10 hover:text-yellow-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                  disabled={rowActionLoadingId === user._id}
+                                  onClick={() => handleToggleBlock(user)}
+                                  title={
+                                    user.isBlocked
+                                      ? "Unsuspend user"
+                                      : "Suspend user"
+                                  }
+                                  type="button">
+                                  <span className="material-symbols-outlined text-xl">
+                                    {user.isBlocked ? "check_circle" : "block"}
+                                  </span>
+                                </button>
+                                <button
+                                  className="rounded-lg p-2 text-white/40 transition-all hover:bg-white/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                  disabled={rowActionLoadingId === user._id}
+                                  onClick={() => handleDeleteUser(user)}
+                                  title="Delete user"
+                                  type="button">
+                                  <span className="material-symbols-outlined text-xl">
+                                    delete
+                                  </span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td
+                          className="px-6 py-8 text-sm text-white/50"
+                          colSpan={5}>
+                          No users found for this filter.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
 
-              <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-t border-white/10">
+              <div className="flex items-center justify-between border-t border-white/10 bg-white/5 px-6 py-4">
                 <span className="text-xs text-white/40">
-                  Showing 4 of 1,284 users
+                  Showing {users.length} of {pagination.total || 0} users
                 </span>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1 bg-charcoal border border-white/10 rounded-md text-white/40 text-xs hover:border-accent transition-colors">
+                <div className="flex items-center gap-2">
+                  <button
+                    className="rounded-md border border-white/10 bg-charcoal px-3 py-1 text-xs text-white/80 transition-colors hover:border-accent disabled:text-white/30"
+                    disabled={!canGoPrev || isLoading}
+                    onClick={() =>
+                      setPagination((prev) => ({
+                        ...prev,
+                        page: prev.page - 1,
+                      }))
+                    }
+                    type="button">
                     Previous
                   </button>
-                  <button className="px-3 py-1 bg-accent text-charcoal font-black rounded-md text-xs">
-                    1
-                  </button>
-                  <button className="px-3 py-1 bg-charcoal border border-white/10 rounded-md text-white/80 text-xs hover:border-accent transition-colors">
-                    2
-                  </button>
-                  <button className="px-3 py-1 bg-charcoal border border-white/10 rounded-md text-white/80 text-xs hover:border-accent transition-colors">
-                    3
-                  </button>
-                  <button className="px-3 py-1 bg-charcoal border border-white/10 rounded-md text-white/80 text-xs hover:border-accent transition-colors">
+                  <span className="rounded-md bg-accent px-3 py-1 text-xs font-black text-charcoal">
+                    {pagination.page} / {Math.max(1, pagination.pages || 1)}
+                  </span>
+                  <button
+                    className="rounded-md border border-white/10 bg-charcoal px-3 py-1 text-xs text-white/80 transition-colors hover:border-accent disabled:text-white/30"
+                    disabled={!canGoNext || isLoading}
+                    onClick={() =>
+                      setPagination((prev) => ({
+                        ...prev,
+                        page: prev.page + 1,
+                      }))
+                    }
+                    type="button">
                     Next
                   </button>
                 </div>
@@ -417,29 +580,133 @@ export default function UserManagementPage() {
             </div>
           </main>
 
-          <footer className="bg-charcoal text-white/60 py-8 px-6 md:px-20 border-t border-white/5">
-            <div className="max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-xs">
-              <div className="flex items-center gap-3">
-                <div className="text-accent">
-                  <span className="material-symbols-outlined text-2xl">
-                    movie_filter
-                  </span>
+          {isInviteModalOpen ? (
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4">
+              <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-charcoal shadow-2xl">
+                <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+                  <div>
+                    <h3 className="text-lg font-black text-white">
+                      Admin Access Control
+                    </h3>
+                    <p className="text-xs text-white/45">
+                      View current admins and pass admin privileges to another
+                      user.
+                    </p>
+                  </div>
+                  <button
+                    className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/70 hover:bg-white/10"
+                    onClick={() => setIsInviteModalOpen(false)}
+                    type="button">
+                    <span className="material-symbols-outlined text-base">
+                      close
+                    </span>
+                  </button>
                 </div>
-                <p>© 2024 CineEvent International Admin Console.</p>
-              </div>
-              <div className="flex gap-6">
-                <a className="hover:text-accent transition-colors" href="#">
-                  System Status
-                </a>
-                <a className="hover:text-accent transition-colors" href="#">
-                  Internal Wiki
-                </a>
-                <a className="hover:text-accent transition-colors" href="#">
-                  Support Desk
-                </a>
+
+                <div className="grid gap-6 p-6 lg:grid-cols-2">
+                  <section>
+                    <h4 className="mb-3 text-xs font-bold uppercase tracking-widest text-white/50">
+                      Current Admins
+                    </h4>
+                    <div className="max-h-64 space-y-2 overflow-auto pr-1 custom-scrollbar">
+                      {admins.length ? (
+                        admins.map((adminUser) => (
+                          <div
+                            className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2"
+                            key={adminUser._id}>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-xs font-black text-emerald-200">
+                              {initials(adminUser.name)}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-white">
+                                {adminUser.name}
+                              </p>
+                              <p className="text-[11px] text-white/50">
+                                {adminUser.email}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-white/40">
+                          No admins found.
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section>
+                    <h4 className="mb-3 text-xs font-bold uppercase tracking-widest text-white/50">
+                      Promote User To Admin
+                    </h4>
+
+                    <div className="space-y-3">
+                      <input
+                        className="w-full rounded-xl border border-white/10 bg-background-dark px-3 py-2 text-sm text-white placeholder:text-white/35 focus:border-accent focus:outline-none"
+                        onChange={(event) =>
+                          setCandidateQuery(event.target.value)
+                        }
+                        placeholder="Search user by name or email"
+                        type="text"
+                        value={candidateQuery}
+                      />
+
+                      <button
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75 hover:bg-white/10"
+                        disabled={isModalLoading}
+                        onClick={() =>
+                          loadInviteModalData(candidateQuery.trim())
+                        }
+                        type="button">
+                        Search
+                      </button>
+
+                      <select
+                        className="w-full rounded-xl border border-white/10 bg-background-dark px-3 py-2 text-sm text-white focus:border-accent focus:outline-none"
+                        onChange={(event) =>
+                          setSelectedCandidateId(event.target.value)
+                        }
+                        value={selectedCandidateId}>
+                        <option value="">Select user</option>
+                        {candidateUsers.map((user) => (
+                          <option key={user._id} value={user._id}>
+                            {user.name} ({user.email})
+                          </option>
+                        ))}
+                      </select>
+
+                      {selectedCandidate ? (
+                        <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/70">
+                          Selected: {selectedCandidate.name} -{" "}
+                          {selectedCandidate.email}
+                        </div>
+                      ) : null}
+
+                      <button
+                        className="w-full rounded-xl bg-accent px-4 py-2 text-sm font-black text-charcoal transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={
+                          isPromoting || isModalLoading || !selectedCandidateId
+                        }
+                        onClick={handlePromote}
+                        type="button">
+                        {isPromoting ? "Granting..." : "Grant Admin Privileges"}
+                      </button>
+                    </div>
+                  </section>
+                </div>
+
+                {(modalError || modalMessage) && (
+                  <div className="border-t border-white/10 px-6 py-3">
+                    {modalError ? (
+                      <p className="text-sm text-red-300">{modalError}</p>
+                    ) : (
+                      <p className="text-sm text-emerald-300">{modalMessage}</p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-          </footer>
+          ) : null}
         </AdminPageFrame>
       </div>
     </>

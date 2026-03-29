@@ -120,35 +120,35 @@ export default function LoginPage() {
         Return to Home Page
       </Link>
 
-      <main className="relative z-10 w-full max-w-[480px] px-6 py-12">
+      <main className="relative z-10 w-full max-w-[440px] px-5 py-8">
         <div
-          className="rounded-xl p-8 shadow-2xl transition-all md:p-12"
+          className="rounded-xl p-6 shadow-2xl transition-all md:p-8"
           style={{
             background: "rgba(28, 28, 28, 0.85)",
             backdropFilter: "blur(12px)",
             border: "1px solid rgba(245, 192, 101, 0.15)",
           }}>
-          <div className="mb-10 flex flex-col items-center">
-            <div className="mb-4 text-accent">
-              <span className="material-symbols-outlined text-5xl">
+          <div className="mb-7 flex flex-col items-center">
+            <div className="mb-3 text-accent">
+              <span className="material-symbols-outlined text-4xl">
                 movie_filter
               </span>
             </div>
-            <h1 className="text-3xl font-black tracking-tighter text-white">
+            <h1 className="text-2xl font-black tracking-tighter text-white">
               CINÉ<span className="text-accent">EVENT</span>
             </h1>
-            <p className="mt-2 text-sm font-medium uppercase tracking-[0.2em] text-white/50">
+            <p className="mt-1.5 text-xs font-medium uppercase tracking-[0.2em] text-white/50">
               Secure Access Portal
             </p>
           </div>
 
           {error && (
-            <div className="mb-6 rounded-lg bg-red-500/20 p-3 text-sm text-red-300 border border-red-500/30">
+            <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/20 p-2.5 text-xs text-red-300">
               {error}
             </div>
           )}
 
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <label
                 className="ml-1 text-xs font-bold uppercase tracking-widest text-accent"
@@ -156,11 +156,11 @@ export default function LoginPage() {
                 Email Address
               </label>
               <div className="group relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/30 transition-colors group-focus-within:text-accent">
+                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 transition-colors group-focus-within:text-accent">
                   mail
                 </span>
                 <input
-                  className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-2 focus:ring-accent/50"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-3.5 text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-2 focus:ring-accent/50"
                   id="email"
                   name="email"
                   placeholder="name@example.com"
@@ -186,11 +186,11 @@ export default function LoginPage() {
                 </Link>
               </div>
               <div className="group relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/30 transition-colors group-focus-within:text-accent">
+                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 transition-colors group-focus-within:text-accent">
                   lock
                 </span>
                 <input
-                  className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-2 focus:ring-accent/50"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-3.5 text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-2 focus:ring-accent/50"
                   id="password"
                   name="password"
                   placeholder="••••••••"
@@ -211,7 +211,7 @@ export default function LoginPage() {
             </div>
 
             <button
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               type="submit"
               disabled={loading}>
               {loading ? "Signing in..." : "Enter Cinema"}
@@ -220,7 +220,7 @@ export default function LoginPage() {
               </span>
             </button>
 
-            <div className="relative flex items-center py-4">
+            <div className="relative flex items-center py-3">
               <div className="flex-grow border-t border-white/10" />
               <span className="mx-4 flex-shrink text-xs font-bold uppercase tracking-widest text-white/20">
                 Or continue with
@@ -229,7 +229,7 @@ export default function LoginPage() {
             </div>
 
             <button
-              className="group flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 py-3.5 font-bold text-white transition-all hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 py-3 font-bold text-white transition-all hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
               type="button"
               disabled={loading || googleLoading}
               onClick={handleGoogleLogin}>
@@ -257,8 +257,8 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-10 text-center">
-            <p className="text-sm text-white/40">
+          <div className="mt-7 text-center">
+            <p className="text-xs text-white/40">
               Don&apos;t have an account yet?
               <Link
                 className="ml-1 font-bold text-accent hover:underline"

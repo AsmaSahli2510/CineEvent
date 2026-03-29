@@ -149,18 +149,18 @@ export default function SpectatorRegistrationPage() {
         </div>
       </header>
 
-      <main className="relative flex flex-grow items-center justify-center px-6 pb-12 pt-24">
+      <main className="relative flex flex-grow items-center justify-center px-5 pb-8 pt-20">
         <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
           <div className="absolute -left-[5%] -top-[10%] h-[40%] w-[40%] rounded-full bg-primary/20 blur-[120px]" />
           <div className="absolute -bottom-[10%] -right-[5%] h-[40%] w-[40%] rounded-full bg-accent/10 blur-[120px]" />
         </div>
 
-        <div className="relative z-10 w-full max-w-xl">
-          <div className="relative mb-12 flex items-center justify-between px-4">
+        <div className="relative z-10 w-full max-w-lg">
+          <div className="relative mb-8 flex items-center justify-between px-3">
             <div className="absolute left-0 top-1/2 z-0 h-[1px] w-full -translate-y-1/2 bg-white/10" />
             <div className="relative z-10 flex flex-col items-center gap-2">
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${
+                className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold ${
                   step >= 1
                     ? "border-accent bg-accent text-charcoal"
                     : "border-white/10 bg-background-dark text-white/40"
@@ -168,7 +168,7 @@ export default function SpectatorRegistrationPage() {
                 1
               </div>
               <span
-                className={`text-[10px] font-bold uppercase tracking-widest ${
+                className={`text-[9px] font-bold uppercase tracking-widest ${
                   step >= 1 ? "text-accent" : "text-white/40"
                 }`}>
                 Personal
@@ -176,7 +176,7 @@ export default function SpectatorRegistrationPage() {
             </div>
             <div className="relative z-10 flex flex-col items-center gap-2">
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${
+                className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-xs font-bold ${
                   step >= 2
                     ? "border-accent bg-accent text-charcoal"
                     : "border-white/10 bg-background-dark text-white/40"
@@ -184,36 +184,36 @@ export default function SpectatorRegistrationPage() {
                 2
               </div>
               <span
-                className={`text-[10px] font-bold uppercase tracking-widest ${
+                className={`text-[9px] font-bold uppercase tracking-widest ${
                   step >= 2 ? "text-accent" : "text-white/40"
                 }`}>
                 Security
               </span>
             </div>
             <div className="relative z-10 flex flex-col items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/10 bg-background-dark text-sm font-bold text-white/40">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/10 bg-background-dark text-xs font-bold text-white/40">
                 3
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">
                 Preferences
               </span>
             </div>
           </div>
 
           <div
-            className="rounded-3xl p-8 shadow-2xl md:p-12"
+            className="rounded-3xl p-6 shadow-2xl md:p-8"
             style={{
               background: "rgba(28, 28, 28, 0.8)",
               backdropFilter: "blur(20px)",
               border: "1px solid rgba(245, 192, 101, 0.1)",
             }}>
-            <div className="mb-8">
-              <h2 className="mb-2 text-3xl font-black">
+            <div className="mb-6">
+              <h2 className="mb-1.5 text-2xl font-black">
                 {step === 1
                   ? "Create Spectator Account"
                   : "Secure Your Account"}
               </h2>
-              <p className="text-white/60">
+              <p className="text-sm text-white/60">
                 {step === 1
                   ? "Join the elite community of cinema enthusiasts."
                   : "Set a strong password to protect your account."}
@@ -221,16 +221,16 @@ export default function SpectatorRegistrationPage() {
             </div>
 
             {error && (
-              <div className="mb-6 rounded-lg bg-red-500/20 p-3 text-sm text-red-300 border border-red-500/30">
+              <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/20 p-2.5 text-xs text-red-300">
                 {error}
               </div>
             )}
 
             <form
-              className="space-y-6"
+              className="space-y-5"
               onSubmit={step === 2 ? handleSubmit : undefined}>
               {step === 1 ? (
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 gap-5">
                   <div className="space-y-2">
                     <label className="px-1 text-xs font-bold uppercase tracking-widest text-accent/80">
                       Full Name
@@ -240,7 +240,7 @@ export default function SpectatorRegistrationPage() {
                         person
                       </span>
                       <input
-                        className="w-full rounded-xl border border-white/10 bg-[#252525] py-4 pl-12 pr-4 text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent"
+                        className="w-full rounded-xl border border-white/10 bg-[#252525] py-3.5 pl-12 pr-4 text-sm text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent"
                         placeholder="e.g. Julian Vane"
                         type="text"
                         name="name"
@@ -259,7 +259,7 @@ export default function SpectatorRegistrationPage() {
                         alternate_email
                       </span>
                       <input
-                        className="w-full rounded-xl border border-white/10 bg-[#252525] py-4 pl-12 pr-4 text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent"
+                        className="w-full rounded-xl border border-white/10 bg-[#252525] py-3.5 pl-12 pr-4 text-sm text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent"
                         placeholder="julian@prestige.com"
                         type="email"
                         name="email"
@@ -281,7 +281,7 @@ export default function SpectatorRegistrationPage() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 gap-5">
                   <div className="space-y-2">
                     <label className="px-1 text-xs font-bold uppercase tracking-widest text-accent/80">
                       Password
@@ -291,7 +291,7 @@ export default function SpectatorRegistrationPage() {
                         lock
                       </span>
                       <input
-                        className="w-full rounded-xl border border-white/10 bg-[#252525] py-4 pl-12 pr-12 text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent"
+                        className="w-full rounded-xl border border-white/10 bg-[#252525] py-3.5 pl-12 pr-12 text-sm text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent"
                         placeholder="••••••••••••"
                         type={showPassword ? "text" : "password"}
                         name="password"
@@ -343,7 +343,7 @@ export default function SpectatorRegistrationPage() {
                         lock
                       </span>
                       <input
-                        className="w-full rounded-xl border border-white/10 bg-[#252525] py-4 pl-12 pr-12 text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent"
+                        className="w-full rounded-xl border border-white/10 bg-[#252525] py-3.5 pl-12 pr-12 text-sm text-white placeholder:text-white/20 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent"
                         placeholder="••••••••••••"
                         type={showConfirmPassword ? "text" : "password"}
                         name="confirmPassword"
@@ -370,7 +370,7 @@ export default function SpectatorRegistrationPage() {
               <div className="pt-4">
                 {step === 1 ? (
                   <button
-                    className="group flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-4 font-black text-charcoal shadow-xl shadow-accent/10 transition-all hover:bg-accent/90 disabled:opacity-50"
+                    className="group flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3.5 font-black text-charcoal shadow-xl shadow-accent/10 transition-all hover:bg-accent/90 disabled:opacity-50"
                     type="button"
                     onClick={handleNextStep}
                     disabled={loading}>
@@ -381,7 +381,7 @@ export default function SpectatorRegistrationPage() {
                   </button>
                 ) : (
                   <button
-                    className="group flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-4 font-black text-charcoal shadow-xl shadow-accent/10 transition-all hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="group flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3.5 font-black text-charcoal shadow-xl shadow-accent/10 transition-all hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed"
                     type="submit"
                     disabled={loading}>
                     {loading ? "Creating Account..." : "Create Account"}
@@ -394,7 +394,7 @@ export default function SpectatorRegistrationPage() {
 
               {step === 2 && (
                 <button
-                  className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 font-bold text-white transition-all hover:bg-white/10"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 py-3 font-bold text-white transition-all hover:bg-white/10"
                   type="button"
                   onClick={() => setStep(1)}
                   disabled={loading}>
@@ -416,9 +416,9 @@ export default function SpectatorRegistrationPage() {
             </form>
           </div>
 
-          <div className="mt-8 text-center">
+          <div className="mt-6 text-center">
             <a
-              className="inline-flex items-center gap-2 text-sm font-medium text-white/40 transition-colors hover:text-accent"
+              className="inline-flex items-center gap-2 text-xs font-medium text-white/40 transition-colors hover:text-accent"
               href="#">
               <span className="material-symbols-outlined text-lg">help</span>
               Need assistance with your registration?

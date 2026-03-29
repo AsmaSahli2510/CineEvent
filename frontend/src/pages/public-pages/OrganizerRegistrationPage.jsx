@@ -152,13 +152,13 @@ export default function OrganizerRegistrationPage() {
 
   return (
     <div className="flex-1 bg-background-dark text-white">
-      <main className="flex flex-1 flex-col items-center px-6 py-12 md:py-16">
-        <div className="w-full max-w-4xl">
-          <div className="relative mb-12 flex items-center justify-between">
+      <main className="flex flex-1 flex-col items-center px-5 py-8 md:py-12">
+        <div className="w-full max-w-3xl">
+          <div className="relative mb-8 flex items-center justify-between">
             <div className="absolute left-0 top-1/2 -z-10 h-px w-full -translate-y-1/2 bg-white/10" />
-            <div className="flex flex-col items-center gap-3 bg-background-dark px-4">
+            <div className="flex flex-col items-center gap-2 bg-background-dark px-3">
               <div
-                className={`flex h-12 w-12 items-center justify-center rounded-full border-2 font-bold ${
+                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${
                   step >= 1
                     ? "border-accent bg-accent text-charcoal"
                     : "border-white/20 bg-background-dark text-white/40"
@@ -166,15 +166,15 @@ export default function OrganizerRegistrationPage() {
                 1
               </div>
               <span
-                className={`text-xs font-bold uppercase tracking-widest ${
+                className={`text-[11px] font-bold uppercase tracking-widest ${
                   step >= 1 ? "text-accent" : "text-white/40"
                 }`}>
                 Organization
               </span>
             </div>
-            <div className="flex flex-col items-center gap-3 bg-background-dark px-4">
+            <div className="flex flex-col items-center gap-2 bg-background-dark px-3">
               <div
-                className={`flex h-12 w-12 items-center justify-center rounded-full border-2 font-bold ${
+                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${
                   step >= 2
                     ? "border-accent bg-accent text-charcoal"
                     : "border-white/20 bg-background-dark text-white/40"
@@ -182,15 +182,15 @@ export default function OrganizerRegistrationPage() {
                 2
               </div>
               <span
-                className={`text-xs font-bold uppercase tracking-widest ${
+                className={`text-[11px] font-bold uppercase tracking-widest ${
                   step >= 2 ? "text-accent" : "text-white/40"
                 }`}>
                 Financial
               </span>
             </div>
-            <div className="flex flex-col items-center gap-3 bg-background-dark px-4">
+            <div className="flex flex-col items-center gap-2 bg-background-dark px-3">
               <div
-                className={`flex h-12 w-12 items-center justify-center rounded-full border-2 font-bold ${
+                className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${
                   step >= 3
                     ? "border-accent bg-accent text-charcoal"
                     : "border-white/20 bg-background-dark text-white/40"
@@ -198,7 +198,7 @@ export default function OrganizerRegistrationPage() {
                 3
               </div>
               <span
-                className={`text-xs font-bold uppercase tracking-widest ${
+                className={`text-[11px] font-bold uppercase tracking-widest ${
                   step >= 3 ? "text-accent" : "text-white/40"
                 }`}>
                 Legal
@@ -207,12 +207,12 @@ export default function OrganizerRegistrationPage() {
           </div>
 
           <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl">
-            <div className="p-8 md:p-12">
-              <div className="mb-10">
-                <h2 className="mb-2 text-3xl font-bold">
+            <div className="p-6 md:p-8">
+              <div className="mb-7">
+                <h2 className="mb-1.5 text-2xl font-bold">
                   Professional Organizer Registration
                 </h2>
-                <p className="text-white/50">
+                <p className="text-sm text-white/50">
                   {step === 1 &&
                     "Set up your organizer profile and account details."}
                   {step === 2 && "Provide payout information for your events."}
@@ -222,14 +222,14 @@ export default function OrganizerRegistrationPage() {
               </div>
 
               {error && (
-                <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/15 p-3 text-sm text-red-200">
+                <div className="mb-5 rounded-lg border border-red-500/40 bg-red-500/15 p-2.5 text-xs text-red-200">
                   {error}
                 </div>
               )}
 
-              <form className="space-y-8" onSubmit={handleSubmit}>
+              <form className="space-y-6" onSubmit={handleSubmit}>
                 {step === 1 && (
-                  <section className="space-y-6">
+                  <section className="space-y-5">
                     <div className="flex items-center gap-3 border-b border-white/10 pb-4">
                       <span className="material-symbols-outlined text-accent">
                         business
@@ -239,13 +239,13 @@ export default function OrganizerRegistrationPage() {
                       </h3>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       <div className="space-y-2">
                         <label className="ml-1 text-sm font-medium text-white/70">
                           Organization Name
                         </label>
                         <input
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white focus:border-accent focus:ring-accent"
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-accent focus:ring-accent"
                           name="organizationName"
                           placeholder="e.g. Vintage Film Society"
                           type="text"
@@ -258,7 +258,7 @@ export default function OrganizerRegistrationPage() {
                           Website (Optional)
                         </label>
                         <input
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white focus:border-accent focus:ring-accent"
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-accent focus:ring-accent"
                           name="website"
                           placeholder="https://"
                           type="url"
@@ -271,7 +271,7 @@ export default function OrganizerRegistrationPage() {
                           Full Name (Representative)
                         </label>
                         <input
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white focus:border-accent focus:ring-accent"
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-accent focus:ring-accent"
                           name="name"
                           placeholder="e.g. Nora Benson"
                           type="text"
@@ -284,7 +284,7 @@ export default function OrganizerRegistrationPage() {
                           Business Email
                         </label>
                         <input
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white focus:border-accent focus:ring-accent"
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-accent focus:ring-accent"
                           name="email"
                           placeholder="you@company.com"
                           type="email"
@@ -298,7 +298,7 @@ export default function OrganizerRegistrationPage() {
                         </label>
                         <div className="relative">
                           <input
-                            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pr-12 text-white focus:border-accent focus:ring-accent"
+                            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 pr-12 text-sm text-white focus:border-accent focus:ring-accent"
                             name="password"
                             placeholder="Minimum 8 characters"
                             type={showPassword ? "text" : "password"}
@@ -321,7 +321,7 @@ export default function OrganizerRegistrationPage() {
                         </label>
                         <div className="relative">
                           <input
-                            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pr-12 text-white focus:border-accent focus:ring-accent"
+                            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 pr-12 text-sm text-white focus:border-accent focus:ring-accent"
                             name="confirmPassword"
                             placeholder="Repeat your password"
                             type={showConfirmPassword ? "text" : "password"}
@@ -347,7 +347,7 @@ export default function OrganizerRegistrationPage() {
                           Short Bio
                         </label>
                         <textarea
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white focus:border-accent focus:ring-accent"
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white focus:border-accent focus:ring-accent"
                           name="shortBio"
                           placeholder="Tell us about your experience in organizing cinema events..."
                           rows="3"
@@ -360,7 +360,7 @@ export default function OrganizerRegistrationPage() {
                 )}
 
                 {step === 2 && (
-                  <section className="space-y-6">
+                  <section className="space-y-5">
                     <div className="flex items-center gap-3 border-b border-white/10 pb-4">
                       <span className="material-symbols-outlined text-accent">
                         payments
@@ -371,7 +371,7 @@ export default function OrganizerRegistrationPage() {
                     </div>
 
                     <div className="space-y-4">
-                      <div className="flex items-start gap-4 rounded-xl border border-primary/30 bg-primary/10 p-4">
+                      <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/10 p-3.5">
                         <span className="material-symbols-outlined text-accent">
                           info
                         </span>
@@ -386,7 +386,7 @@ export default function OrganizerRegistrationPage() {
                           IBAN for Future Payouts
                         </label>
                         <input
-                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-mono text-white focus:border-accent focus:ring-accent"
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-mono text-sm text-white focus:border-accent focus:ring-accent"
                           name="iban"
                           placeholder="GB00 0000 0000 0000 0000 00"
                           type="text"
@@ -399,7 +399,7 @@ export default function OrganizerRegistrationPage() {
                 )}
 
                 {step === 3 && (
-                  <section className="space-y-6">
+                  <section className="space-y-5">
                     <div className="flex items-center gap-3 border-b border-white/10 pb-4">
                       <span className="material-symbols-outlined text-accent">
                         gavel
@@ -407,13 +407,13 @@ export default function OrganizerRegistrationPage() {
                       <h3 className="text-lg font-bold">Legal Verification</h3>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                       <div className="space-y-4">
                         <p className="text-sm text-white/60">
                           Please upload three documents: Company Registration
                           Certificate, Proof of Address, and Identity Document.
                         </p>
-                        <label className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-white/5 p-8 transition-colors hover:border-accent/50 hover:bg-white/10">
+                        <label className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/10 bg-white/5 p-6 transition-colors hover:border-accent/50 hover:bg-white/10">
                           <span className="material-symbols-outlined mb-2 text-4xl text-white/20 group-hover:text-accent">
                             upload_file
                           </span>
@@ -448,7 +448,7 @@ export default function OrganizerRegistrationPage() {
                           />
                         </label>
                       </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
                         <h4 className="mb-3 text-sm font-bold uppercase tracking-wider text-accent">
                           Required:
                         </h4>
@@ -475,7 +475,7 @@ export default function OrganizerRegistrationPage() {
                       </div>
                     </div>
 
-                    <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                    <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3.5 text-sm text-white/70">
                       <input
                         checked={formData.termsAccepted}
                         className="mt-1"
@@ -487,7 +487,7 @@ export default function OrganizerRegistrationPage() {
                       accept the organizer terms.
                     </label>
 
-                    <div className="flex items-start gap-4 rounded-xl border border-accent/20 bg-charcoal p-4">
+                    <div className="flex items-start gap-4 rounded-xl border border-accent/20 bg-charcoal p-3.5">
                       <span className="material-symbols-outlined mt-0.5 text-accent">
                         verified_user
                       </span>
@@ -508,10 +508,10 @@ export default function OrganizerRegistrationPage() {
                   </section>
                 )}
 
-                <div className="flex flex-col gap-4 border-t border-white/10 pt-6 md:flex-row">
+                <div className="flex flex-col gap-3 border-t border-white/10 pt-5 md:flex-row">
                   {step > 1 && (
                     <button
-                      className="rounded-xl border border-white/20 px-8 py-4 text-sm font-bold transition-colors hover:bg-white/5"
+                      className="rounded-xl border border-white/20 px-7 py-3 text-sm font-bold transition-colors hover:bg-white/5"
                       type="button"
                       onClick={handlePreviousStep}>
                       Back
@@ -520,7 +520,7 @@ export default function OrganizerRegistrationPage() {
 
                   {step < 3 ? (
                     <button
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent py-4 text-sm font-black text-charcoal transition-all hover:scale-[1.02] hover:bg-white"
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-sm font-black text-charcoal transition-all hover:scale-[1.02] hover:bg-white"
                       type="button"
                       onClick={handleNextStep}>
                       Next Step
@@ -530,7 +530,7 @@ export default function OrganizerRegistrationPage() {
                     </button>
                   ) : (
                     <button
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent py-4 text-sm font-black text-charcoal transition-all hover:scale-[1.02] hover:bg-white disabled:opacity-60"
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-sm font-black text-charcoal transition-all hover:scale-[1.02] hover:bg-white disabled:opacity-60"
                       disabled={loading}
                       type="submit">
                       {loading ? "SUBMITTING..." : "COMPLETE REGISTRATION"}
@@ -541,7 +541,7 @@ export default function OrganizerRegistrationPage() {
                   )}
 
                   <button
-                    className="rounded-xl border border-white/20 px-8 py-4 text-sm font-bold transition-colors hover:bg-white/5"
+                    className="rounded-xl border border-white/20 px-7 py-3 text-sm font-bold transition-colors hover:bg-white/5"
                     type="button"
                     onClick={handleSaveDraft}>
                     Save Progress
