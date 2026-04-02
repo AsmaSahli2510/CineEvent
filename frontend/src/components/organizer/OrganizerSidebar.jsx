@@ -90,20 +90,20 @@ export default function OrganizerSidebar({ isOpen, onClose }) {
             : "w-20 -translate-x-full lg:translate-x-0"
         }`}>
         <div className="flex h-full flex-col">
-          <div className="p-6">
+          <div className="p-5">
             <div
-              className={`mb-6 flex items-center ${
+              className={`mb-5 flex items-center ${
                 isCollapsed ? "justify-center" : "justify-between"
               }`}>
               <div
                 className={`flex items-center text-accent ${
-                  isCollapsed ? "justify-center" : "gap-2.5"
+                  isCollapsed ? "justify-center" : "gap-2"
                 }`}>
-                <span className="material-symbols-outlined text-2xl">
+                <span className="material-symbols-outlined text-[22px]">
                   movie_filter
                 </span>
                 <h1
-                  className={`text-lg font-black tracking-tight uppercase text-white ${
+                  className={`text-base font-black tracking-tight uppercase text-white ${
                     isCollapsed ? "hidden" : ""
                   }`}>
                   CINE<span className="text-accent">ORGANIZER</span>
@@ -122,15 +122,15 @@ export default function OrganizerSidebar({ isOpen, onClose }) {
               ) : null}
             </div>
 
-            <nav className="space-y-2">
+            <nav className="space-y-1.5">
               {navItems.map((item) => {
                 const active = isItemActive(item.to, pathname);
 
                 return (
                   <Link
                     key={item.to}
-                    className={`flex items-center rounded-xl py-3 text-sm font-bold transition-all ${
-                      isCollapsed ? "justify-center px-2" : "gap-4 px-4"
+                    className={`flex items-center rounded-lg py-2.5 text-[13px] font-bold transition-all ${
+                      isCollapsed ? "justify-center px-2" : "gap-3 px-3"
                     } ${
                       active
                         ? "border border-primary/30 bg-primary/20 text-accent"
@@ -138,7 +138,7 @@ export default function OrganizerSidebar({ isOpen, onClose }) {
                     }`}
                     onClick={handleNavClick}
                     to={item.to}>
-                    <span className="material-symbols-outlined">
+                    <span className="material-symbols-outlined text-[18px] leading-none">
                       {item.icon}
                     </span>
                     {!isCollapsed ? <span>{item.label}</span> : null}
@@ -149,35 +149,35 @@ export default function OrganizerSidebar({ isOpen, onClose }) {
           </div>
 
           <div
-            className={`mt-auto border-t border-white/5 ${isCollapsed ? "p-3" : "p-8"}`}>
+            className={`mt-auto border-t border-white/5 ${isCollapsed ? "p-3" : "p-6"}`}>
             {!isCollapsed ? (
-              <h3 className="mb-6 text-xs font-bold uppercase tracking-widest text-white/40">
+              <h3 className="mb-4 text-[11px] font-bold uppercase tracking-widest text-white/40">
                 Organizer Focus
               </h3>
             ) : null}
-            <div className={isCollapsed ? "space-y-2" : "space-y-4"}>
+            <div className={isCollapsed ? "space-y-2" : "space-y-3"}>
               <Link
                 to="/organizer/events/create"
                 onClick={handleNavClick}
                 className={`flex items-center rounded-xl border border-accent/20 bg-accent/5 transition-colors hover:border-accent/40 ${
-                  isCollapsed ? "justify-center p-2" : "gap-3 p-3"
+                  isCollapsed ? "justify-center p-2" : "gap-2.5 p-2.5"
                 }`}>
                 {isCollapsed ? (
-                  <span className="material-symbols-outlined text-base text-accent">
+                  <span className="material-symbols-outlined text-sm text-accent">
                     add_circle
                   </span>
                 ) : (
                   <>
-                    <div className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                     <div className="flex-1">
-                      <p className="text-xs font-bold text-white">
+                      <p className="text-[11px] font-bold text-white">
                         Publish Next Event
                       </p>
-                      <p className="text-[10px] text-white/40">
+                      <p className="text-[9px] text-white/40">
                         Launch your next campaign
                       </p>
                     </div>
-                    <span className="material-symbols-outlined text-sm text-white/40">
+                    <span className="material-symbols-outlined text-xs text-white/40">
                       chevron_right
                     </span>
                   </>
@@ -187,24 +187,24 @@ export default function OrganizerSidebar({ isOpen, onClose }) {
                 to="/organizer/reservations"
                 onClick={handleNavClick}
                 className={`flex items-center rounded-xl border border-primary/20 bg-primary/5 transition-colors hover:border-primary/40 ${
-                  isCollapsed ? "justify-center p-2" : "gap-3 p-3"
+                  isCollapsed ? "justify-center p-2" : "gap-2.5 p-2.5"
                 }`}>
                 {isCollapsed ? (
-                  <span className="material-symbols-outlined text-base text-primary">
+                  <span className="material-symbols-outlined text-sm text-primary">
                     confirmation_number
                   </span>
                 ) : (
                   <>
-                    <div className="h-2 w-2 rounded-full bg-primary" />
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                     <div className="flex-1">
-                      <p className="text-xs font-bold text-white">
+                      <p className="text-[11px] font-bold text-white">
                         Track Reservations
                       </p>
-                      <p className="text-[10px] text-white/40">
+                      <p className="text-[9px] text-white/40">
                         Monitor audience demand
                       </p>
                     </div>
-                    <span className="material-symbols-outlined text-sm text-white/40">
+                    <span className="material-symbols-outlined text-xs text-white/40">
                       chevron_right
                     </span>
                   </>

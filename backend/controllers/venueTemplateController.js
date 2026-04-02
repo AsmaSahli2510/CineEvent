@@ -88,6 +88,47 @@ const buildTemplatePayload = (body) => {
   };
 };
 
+// @desc    Get published venue templates for organizer event creation
+// @route   GET /api/venue-templates/published
+// @access  Private
+const getPublishedVenueTemplatesForOrganizer = async (_req, res) => {
+  try {
+    const templates = await VenueTemplate.find({ status: "published" })
+      .sort({ updatedAt: -1 })
+      .select(
+        "name subtitle screenLabel ambience covered stats rows structures status updatedAt",
+      );
+
+    res.json({ templates });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get one published venue template by ID for organizer preview
+// @route   GET /api/venue-templates/published/:id
+// @access  Private
+const getPublishedVenueTemplateByIdForOrganizer = async (req, res) => {
+  try {
+    const template = await VenueTemplate.findOne({
+      _id: req.params.id,
+      status: "published",
+    }).select(
+      "name subtitle screenLabel ambience covered stats rows structures status updatedAt",
+    );
+
+    if (!template) {
+      return res
+        .status(404)
+        .json({ message: "Published venue template not found" });
+    }
+
+    res.json(template);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Get venue templates
 // @route   GET /api/venue-templates
 // @access  Private/Admin
@@ -203,6 +244,8 @@ const deleteVenueTemplate = async (req, res) => {
 
 module.exports = {
   getVenueTemplates,
+  getPublishedVenueTemplatesForOrganizer,
+  getPublishedVenueTemplateByIdForOrganizer,
   getVenueTemplateById,
   createVenueTemplate,
   updateVenueTemplate,

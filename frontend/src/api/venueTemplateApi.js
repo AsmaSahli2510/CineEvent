@@ -108,6 +108,43 @@ export const getVenueTemplateById = async (templateId) => {
   return data;
 };
 
+export const getPublishedVenueTemplates = async () => {
+  const response = await fetch(`${API_BASE_URL}/venue-templates/published`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+  });
+
+  const data = await parseJson(response);
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to load published venue templates");
+  }
+
+  return data;
+};
+
+export const getPublishedVenueTemplateById = async (templateId) => {
+  const response = await fetch(
+    `${API_BASE_URL}/venue-templates/published/${templateId}`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeader(),
+      },
+    },
+  );
+
+  const data = await parseJson(response);
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to load published venue template");
+  }
+
+  return data;
+};
+
 export const deleteVenueTemplate = async (templateId) => {
   const response = await fetch(
     `${API_BASE_URL}/venue-templates/${templateId}`,

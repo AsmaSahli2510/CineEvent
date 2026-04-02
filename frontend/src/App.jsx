@@ -113,6 +113,14 @@ export default function App() {
         }
       />
       <Route
+        path="/organizer/venues/preview"
+        element={
+          <ProtectedRoute requiredRole="organizer">
+            <CreateRoomTemplatePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/organizer/events/create-charity"
         element={
           <ProtectedRoute requiredRole="organizer">

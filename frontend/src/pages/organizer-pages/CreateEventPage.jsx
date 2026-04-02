@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
+
 import OrganizerPageFrame from "../../components/organizer/OrganizerPageFrame";
+import { getPublishedVenueTemplates } from "../../api/venueTemplateApi";
+import MiniVenueMap from "../../components/organizer/MiniVenueMap";
 
 const STEPS = [
   {
@@ -32,45 +36,11 @@ const STEPPER_ITEMS = [
   { id: 4, label: "Room", icon: "event_seat" },
 ];
 
-const VENUE_TYPES = ["Cinema Hall", "Open Air", "Cultural House", "Other"];
-
-const ADMIN_VENUES_STORAGE_KEY = "admin_venue_templates";
 const CREATE_EVENT_DRAFT_STORAGE_KEY = "organizer_create_event_draft_v1";
 const ADMIN_VALIDATION_QUEUE_STORAGE_KEY = "admin_event_validation_queue";
 const SERVICE_FEE_RATE = 0.075;
 const MAX_POSTER_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_POSTER_TYPES = ["image/jpeg", "image/png"];
-
-const DEFAULT_ADMIN_VENUES = [
-  {
-    id: "venue-template-imax-grand",
-    name: "Grand IMAX Theater",
-    type: "Cinema Hall",
-    location: "Tunis Centre",
-    capacity: 450,
-  },
-  {
-    id: "venue-template-royal-lounge",
-    name: "Royal Lounge",
-    type: "Cinema Hall",
-    location: "Sousse",
-    capacity: 120,
-  },
-  {
-    id: "venue-template-open-air-marina",
-    name: "Open Air Marina",
-    type: "Open Air",
-    location: "Monastir",
-    capacity: 300,
-  },
-  {
-    id: "venue-template-culture-house",
-    name: "Maison de Culture Ibn Khaldoun",
-    type: "Cultural House",
-    location: "Kairouan",
-    capacity: 220,
-  },
-];
 
 const CHARITY_ASSOCIATIONS = [
   "Amal Childhood Association",
@@ -79,15 +49,49 @@ const CHARITY_ASSOCIATIONS = [
   "SOS Children's Villages Tunisia",
 ];
 
-const VENUE_TYPE_ALIASES = {
-  "Salle de cinema": "Cinema Hall",
-  "Plein air": "Open Air",
-  "Maison de culture": "Cultural House",
-  Autre: "Other",
+const ZONE_CARD_STYLES = {
+  standard: "bg-white/70",
+  premium: "bg-primary/80",
+  vip: "bg-accent",
+  accessible: "bg-pmr-green",
+  bench: "bg-amber-400",
 };
 
-function normalizeVenueType(type) {
-  return VENUE_TYPE_ALIASES[type] || type;
+function rowSeatColor(row) {
+  const zoneId = String(row?.zoneId || "standard");
+  return ZONE_CARD_STYLES[zoneId] || ZONE_CARD_STYLES.standard;
+}
+
+function buildCardSeatRows(venue) {
+  const rows = Array.isArray(venue?.rowItems) ? venue.rowItems : [];
+  return rows.slice(0, 5).map((row, rowIndex) => {
+    const seats = Math.max(
+      2,
+      Math.min(12, Math.ceil((Number(row.seats) || 10) / 2.5)),
+    );
+    const wheelchairCount = Math.max(
+      0,
+      Math.min(seats, Number(row.wheelchair || 0)),
+    );
+
+    return {
+      key: `${venue.id}-row-${row.id || row.label || rowIndex}`,
+      rowLabel: row.label || String.fromCharCode(65 + rowIndex),
+      seats,
+      wheelchairCount,
+      seatClass: rowSeatColor(row),
+    };
+  });
+}
+
+function venueImageClass(ambience) {
+  if (ambience === "sky") {
+    return "from-sky-500/30 via-cyan-400/15 to-background-dark";
+  }
+  if (ambience === "festival") {
+    return "from-primary/35 via-accent/20 to-background-dark";
+  }
+  return "from-white/15 via-white/5 to-background-dark";
 }
 
 const INITIAL_FORM_STATE = {
@@ -144,41 +148,17 @@ function toIsoDateTime(date, time) {
   return new Date(`${date}T${time}`);
 }
 
-function getStoredAdminVenues() {
-  try {
-    const raw = localStorage.getItem(ADMIN_VENUES_STORAGE_KEY);
-    if (!raw) {
-      return DEFAULT_ADMIN_VENUES;
-    }
-
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || !parsed.length) {
-      return DEFAULT_ADMIN_VENUES;
-    }
-
-    return parsed
-      .filter((item) => item && item.id && item.name && item.type)
-      .map((item) => ({
-        id: String(item.id),
-        name: String(item.name),
-        type: normalizeVenueType(String(item.type)),
-        location: item.location
-          ? String(item.location)
-          : "Location not specified",
-        capacity: Number(item.capacity) > 0 ? Number(item.capacity) : null,
-      }));
-  } catch {
-    return DEFAULT_ADMIN_VENUES;
-  }
-}
-
 export default function CreateEventPage() {
+  const navigate = useNavigate();
   const { currentUser } = useSelector((state) => state.auth);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(INITIAL_FORM_STATE);
-  const [venues, setVenues] = useState(() => getStoredAdminVenues());
+  const [venues, setVenues] = useState([]);
+  const [venuesLoading, setVenuesLoading] = useState(true);
+  const [venuesError, setVenuesError] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
   const [draftSavedAt, setDraftSavedAt] = useState(null);
   const [submitCount, setSubmitCount] = useState(0);
   const hydratedDraftRef = useRef(false);
@@ -187,13 +167,6 @@ export default function CreateEventPage() {
     () => venues.find((venue) => venue.id === form.venueTemplateId) || null,
     [venues, form.venueTemplateId],
   );
-
-  const filteredVenues = useMemo(() => {
-    if (!form.venueType) {
-      return venues;
-    }
-    return venues.filter((venue) => venue.type === form.venueType);
-  }, [venues, form.venueType]);
 
   const baseTicketPrice = useMemo(() => {
     if (form.isFreeEvent) {
@@ -237,7 +210,52 @@ export default function CreateEventPage() {
   }, [form.isFreeEvent, baseTicketPrice, serviceFee]);
 
   useEffect(() => {
-    setVenues(getStoredAdminVenues());
+    const loadPublishedVenues = async () => {
+      try {
+        setVenuesLoading(true);
+        setVenuesError("");
+
+        const result = await getPublishedVenueTemplates();
+        const templates = Array.isArray(result?.templates)
+          ? result.templates
+          : [];
+
+        const normalized = templates.map((template) => ({
+          id: String(template._id),
+          name: String(template.name || "Unnamed venue"),
+          description: String(template.subtitle || "Admin published venue"),
+          type: template.covered ? "Cinema Hall" : "Open Air",
+          location: String(template.subtitle || "Admin published venue"),
+          ambience: String(template.ambience || "dark"),
+          covered: Boolean(template.covered),
+          capacity:
+            Number(template?.stats?.capacity) > 0
+              ? Number(template.stats.capacity)
+              : null,
+          rows: Number(template?.stats?.rows) || 0,
+          screenLabel: String(template?.screenLabel || "SCREEN"),
+          zones: Object.entries(template?.stats?.zones || {}),
+          rowItems: Array.isArray(template?.rows) ? template.rows : [],
+          structureItems: Array.isArray(template?.structures)
+            ? template.structures
+            : [],
+          structures: Array.isArray(template?.structures)
+            ? template.structures.length
+            : 0,
+        }));
+
+        setVenues(normalized);
+      } catch (loadError) {
+        setVenues([]);
+        setVenuesError(
+          loadError.message || "Failed to load published admin venues.",
+        );
+      } finally {
+        setVenuesLoading(false);
+      }
+    };
+
+    loadPublishedVenues();
   }, []);
 
   useEffect(() => {
@@ -374,8 +392,8 @@ export default function CreateEventPage() {
   };
 
   const validateStep2 = () => {
-    if (!form.venueType) {
-      return "Please select a venue type.";
+    if (!venues.length) {
+      return "No published admin venues are available right now.";
     }
     if (!form.venueTemplateId) {
       return "Please select a venue created by admin.";
@@ -541,7 +559,7 @@ export default function CreateEventPage() {
         )?.toISOString(),
       },
       venue: {
-        venueType: form.venueType,
+        venueType: selectedVenue?.type || "",
         venueTemplateId: form.venueTemplateId,
         venueTemplateName: selectedVenue?.name || "",
         location: selectedVenue?.location || "",
@@ -704,77 +722,127 @@ export default function CreateEventPage() {
 
     if (step === 2) {
       return (
-        <div className="grid gap-6 md:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-white/80">
-              Venue type *
-            </span>
-            <select
-              name="venueType"
-              value={form.venueType}
-              onChange={(event) => {
-                const selectedType = event.target.value;
-                setForm((previous) => ({
-                  ...previous,
-                  venueType: selectedType,
-                  venueTemplateId: "",
-                }));
-                setError("");
-                setSuccess("");
-              }}
-              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent">
-              <option value="">Select</option>
-              {VENUE_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="space-y-6">
+          <div>
+            <p className="text-sm font-semibold text-white/80">
+              Choose a published venue *
+            </p>
+            <p className="mt-1 text-xs text-white/50">
+              Organizer access is read-only. You can open any venue in preview
+              mode to inspect details and components.
+            </p>
+          </div>
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-white/80">
-              Admin-approved venue *
-            </span>
-            <select
-              name="venueTemplateId"
-              value={form.venueTemplateId}
-              onChange={handleTextInput}
-              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent">
-              <option value="">Select a venue</option>
-              {filteredVenues.map((venue) => (
-                <option key={venue.id} value={venue.id}>
-                  {venue.name} - {venue.location}
-                </option>
-              ))}
-            </select>
-          </label>
+          {venuesLoading ? (
+            <div className="rounded-xl border border-white/10 bg-background-dark p-4 text-sm text-white/55">
+              Loading published venues...
+            </div>
+          ) : null}
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-white/80">
-              Screening date *
-            </span>
-            <input
-              name="screeningDate"
-              value={form.screeningDate}
-              onChange={handleTextInput}
-              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-              type="date"
-            />
-          </label>
+          {!venuesLoading && venuesError ? (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+              {venuesError}
+            </div>
+          ) : null}
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-white/80">
-              Screening time *
-            </span>
-            <input
-              name="screeningTime"
-              value={form.screeningTime}
-              onChange={handleTextInput}
-              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-              type="time"
-            />
-          </label>
+          {!venuesLoading && !venuesError ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {venues.map((venue) => {
+                const isSelected = venue.id === form.venueTemplateId;
+                return (
+                  <article
+                    className={`group overflow-hidden rounded-2xl border bg-charcoal/70 shadow-[0_18px_50px_rgba(0,0,0,0.35)] transition-all duration-300 ${
+                      isSelected
+                        ? "border-accent/50"
+                        : "border-white/10 hover:-translate-y-1 hover:border-accent/40"
+                    }`}
+                    key={venue.id}>
+                    <div
+                      className={`relative border-b border-white/10 bg-gradient-to-br ${venueImageClass(venue.ambience)} p-4`}>
+                      <MiniVenueMap
+                        rows={venue.rowItems}
+                        screenLabel={venue.screenLabel || "SCREEN"}
+                      />
+                    </div>
+                    <div className="space-y-3 p-4">
+                      <div>
+                        <h4 className="text-sm font-black leading-tight text-white">
+                          {venue.name}
+                        </h4>
+                        <p className="mt-1 line-clamp-2 text-xs text-white/55">
+                          {venue.description || "Published venue template"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <button
+                          className={`flex-1 rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
+                            isSelected
+                              ? "border-accent/50 bg-accent/20 text-accent"
+                              : "border-white/10 bg-white/5 text-white/85 hover:bg-white/10"
+                          }`}
+                          onClick={() => {
+                            setField("venueTemplateId", venue.id);
+                            setField("venueType", venue.type);
+                          }}
+                          type="button">
+                          {isSelected ? "Selected" : "Select"}
+                        </button>
+                        <button
+                          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/85 transition-colors hover:bg-white/10"
+                          onClick={() => {
+                            const params = new URLSearchParams({
+                              templateId: venue.id,
+                              preview: "1",
+                              returnTo: "/organizer/events/create",
+                            });
+                            navigate(
+                              `/organizer/venues/preview?${params.toString()}`,
+                            );
+                          }}
+                          type="button">
+                          Open Details
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {!venuesLoading && !venuesError && venues.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/20 bg-background-dark p-4 text-sm text-white/55">
+              No published venues available yet.
+            </div>
+          ) : null}
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-white/80">
+                Screening date *
+              </span>
+              <input
+                name="screeningDate"
+                value={form.screeningDate}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                type="date"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-white/80">
+                Screening time *
+              </span>
+              <input
+                name="screeningTime"
+                value={form.screeningTime}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                type="time"
+              />
+            </label>
+          </div>
 
           {selectedVenue && (
             <article className="md:col-span-2 rounded-2xl border border-accent/30 bg-accent/10 p-4">
@@ -789,6 +857,10 @@ export default function CreateEventPage() {
                 {selectedVenue.capacity
                   ? ` - ${selectedVenue.capacity} seats`
                   : ""}
+              </p>
+              <p className="mt-1 text-xs text-white/55">
+                {selectedVenue.screenLabel} - {selectedVenue.rows} rows -{" "}
+                {selectedVenue.structures} structures (read-only admin template)
               </p>
             </article>
           )}

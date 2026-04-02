@@ -2,6 +2,8 @@ const express = require("express");
 
 const {
   getVenueTemplates,
+  getPublishedVenueTemplatesForOrganizer,
+  getPublishedVenueTemplateByIdForOrganizer,
   getVenueTemplateById,
   createVenueTemplate,
   updateVenueTemplate,
@@ -10,6 +12,13 @@ const {
 const { protect, adminOnly } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+router.get("/published", protect, getPublishedVenueTemplatesForOrganizer);
+router.get(
+  "/published/:id",
+  protect,
+  getPublishedVenueTemplateByIdForOrganizer,
+);
 
 router.use(protect, adminOnly);
 

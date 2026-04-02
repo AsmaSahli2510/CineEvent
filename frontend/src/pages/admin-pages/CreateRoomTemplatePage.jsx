@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   createVenueTemplate,
+  getPublishedVenueTemplateById,
   getVenueTemplateById,
   updateVenueTemplate,
 } from "../../api/venueTemplateApi";
@@ -221,16 +222,18 @@ const VENUE_PRESETS = [
 
 const STRUCTURE_LIBRARY = [
   { type: "entrance", name: "Entrance", icon: "door_front" },
+  { type: "exit", name: "Exit", icon: "door_back" },
   { type: "food", name: "Food Area", icon: "local_dining" },
   { type: "bar", name: "Bar", icon: "local_bar" },
   { type: "shelter", name: "Shelter", icon: "roofing" },
   { type: "restroom", name: "Restrooms", icon: "wc" },
   { type: "lounge", name: "Lounge", icon: "weekend" },
-  { type: "projection", name: "Projection", icon: "movie" },
+  { type: "projection", name: "Projection Booth", icon: "movie" },
   { type: "backstage", name: "Backstage", icon: "theater_comedy" },
 ];
 
 const SIDES = ["north", "south", "east", "west", "center"];
+const STRUCTURE_SIDE_OPTIONS = SIDES.filter((side) => side !== "center");
 
 function cloneState(value) {
   return JSON.parse(JSON.stringify(value));
@@ -325,6 +328,16 @@ export default function CreateRoomTemplatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedTemplateId = searchParams.get("templateId");
+  const previewOnly = ["1", "true", "yes"].includes(
+    String(searchParams.get("preview") || "").toLowerCase(),
+  );
+  const returnToParam = searchParams.get("returnTo");
+  const backHref =
+    returnToParam && returnToParam.startsWith("/")
+      ? returnToParam
+      : previewOnly
+        ? "/organizer/events/create"
+        : "/admin/dashboard";
   const [editor, setEditor] = useState(() =>
     buildStateFromPreset(VENUE_PRESETS[0]),
   );
@@ -338,7 +351,7 @@ export default function CreateRoomTemplatePage() {
     editor.structures[0]?.id || null,
   );
   const [selectedSeat, setSelectedSeat] = useState(null);
-  const [mode, setMode] = useState("design");
+  const [mode, setMode] = useState(previewOnly ? "preview" : "design");
   const [zoom, setZoom] = useState(90);
   const [notice, setNotice] = useState("");
   const [templateId, setTemplateId] = useState(null);
@@ -361,7 +374,9 @@ export default function CreateRoomTemplatePage() {
     const loadTemplate = async () => {
       try {
         setIsLoadingTemplate(true);
-        const template = await getVenueTemplateById(requestedTemplateId);
+        const template = previewOnly
+          ? await getPublishedVenueTemplateById(requestedTemplateId)
+          : await getVenueTemplateById(requestedTemplateId);
         if (!isMounted) {
           return;
         }
@@ -759,6 +774,22 @@ export default function CreateRoomTemplatePage() {
         ? "bg-gradient-to-b from-primary/25 via-background-dark to-background-dark"
         : "bg-background-dark";
   const isPreview = mode === "preview";
+  const structureGroups = useMemo(() => {
+    const initial = {
+      north: [],
+      south: [],
+      east: [],
+      west: [],
+      center: [],
+    };
+
+    editor.structures.forEach((structure) => {
+      const side = SIDES.includes(structure.side) ? structure.side : "center";
+      initial[side].push(structure);
+    });
+
+    return initial;
+  }, [editor.structures]);
 
   return (
     <>
@@ -800,18 +831,27 @@ export default function CreateRoomTemplatePage() {
           background: #333;
           border-radius: 10px;
         }
+
+        .room-template-page select,
+        .room-template-page select option,
+        .room-template-page select optgroup {
+          background-color: #232323;
+          color: #f5f5f5;
+        }
       `}</style>
 
       <div className="room-template-page text-white overflow-hidden h-screen flex flex-col bg-background-dark">
         <header className="h-14 border-b border-white/10 bg-charcoal flex items-center justify-between px-3 lg:px-5 z-20">
           <div className="flex items-center gap-4 lg:gap-6 min-w-0">
-            <Link className="flex items-center gap-2" to="/admin/dashboard">
+            <Link className="flex items-center gap-2" to={backHref}>
               <span className="material-symbols-outlined text-accent">
                 movie_filter
               </span>
               <h1 className="text-xs lg:text-sm font-black tracking-tighter uppercase whitespace-nowrap">
                 CINEADMIN{" "}
-                <span className="text-white/40 ml-2 font-normal">| Editor</span>
+                <span className="text-white/40 ml-2 font-normal">
+                  | {previewOnly ? "Preview" : "Editor"}
+                </span>
               </h1>
             </Link>
             <div className="h-6 w-px bg-white/10 hidden lg:block" />
@@ -824,34 +864,36 @@ export default function CreateRoomTemplatePage() {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
-            <div className="hidden md:flex bg-white/5 rounded-lg p-1">
-              <button
-                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 ${
-                  mode === "design"
-                    ? "bg-accent text-charcoal"
-                    : "text-white/60 hover:text-white"
-                }`}
-                onClick={() => setMode("design")}
-                type="button">
-                <span className="material-symbols-outlined text-sm">
-                  design_services
-                </span>
-                Design
-              </button>
-              <button
-                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 ${
-                  mode === "preview"
-                    ? "bg-accent text-charcoal"
-                    : "text-white/60 hover:text-white"
-                }`}
-                onClick={() => setMode("preview")}
-                type="button">
-                <span className="material-symbols-outlined text-sm">
-                  visibility
-                </span>
-                Preview
-              </button>
-            </div>
+            {previewOnly ? null : (
+              <div className="hidden md:flex bg-white/5 rounded-lg p-1">
+                <button
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 ${
+                    mode === "design"
+                      ? "bg-accent text-charcoal"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                  onClick={() => setMode("design")}
+                  type="button">
+                  <span className="material-symbols-outlined text-sm">
+                    design_services
+                  </span>
+                  Design
+                </button>
+                <button
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 ${
+                    mode === "preview"
+                      ? "bg-accent text-charcoal"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                  onClick={() => setMode("preview")}
+                  type="button">
+                  <span className="material-symbols-outlined text-sm">
+                    visibility
+                  </span>
+                  Preview
+                </button>
+              </div>
+            )}
             {isPreview ? null : (
               <>
                 <button
@@ -1004,128 +1046,267 @@ export default function CreateRoomTemplatePage() {
                 </div>
               )}
 
-              <div className="space-y-2.5 w-full max-w-3xl">
-                {editor.rows.map((row) => {
-                  const zone = zoneById(row.zoneId);
-                  const seatNodes = [];
-
-                  for (
-                    let seatIndex = 1;
-                    seatIndex <= row.seats;
-                    seatIndex += 1
-                  ) {
-                    const seatType = getSeatTypeFromRow(row, seatIndex);
-                    const seatZone = zoneById(seatType);
-                    const isAccessible = seatType === "accessible";
-                    const isBench = seatType === "bench";
-                    const isSelectedSeat =
-                      selectedSeat?.rowId === row.id &&
-                      selectedSeat?.number === seatIndex;
-                    seatNodes.push(
+              {structureGroups.north.length ? (
+                <div className="mb-5 flex w-full max-w-3xl flex-wrap items-center justify-center gap-1.5">
+                  {structureGroups.north.map((structure) => {
+                    const structureMeta =
+                      STRUCTURE_LIBRARY.find(
+                        (item) => item.type === structure.type,
+                      ) || STRUCTURE_LIBRARY[0];
+                    return (
                       <button
-                        key={`${row.id}-seat-${seatIndex}`}
-                        className={`w-6 h-6 rounded-t-md text-[9px] font-bold transition-all ${seatZone.seatClass} ${
-                          isSelectedSeat ? "ring-2 ring-white" : ""
-                        } ${mode === "preview" ? "opacity-85" : ""}`}
+                        key={structure.id}
+                        className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
+                          !isPreview && selectedStructureId === structure.id
+                            ? "border-accent bg-accent/15 text-accent"
+                            : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                        }`}
                         disabled={isPreview}
-                        onClick={(event) => {
+                        onClick={() => {
                           if (isPreview) {
                             return;
                           }
-                          event.stopPropagation();
-                          setSelectedRowId(row.id);
-                          setSelectedSeat({ rowId: row.id, number: seatIndex });
+                          setSelectedStructureId(structure.id);
                         }}
                         type="button">
-                        {isAccessible ? (
-                          <span className="material-symbols-outlined text-[10px] leading-none">
-                            accessible
-                          </span>
-                        ) : isBench ? (
-                          <span className="material-symbols-outlined text-[10px] leading-none">
-                            weekend
-                          </span>
-                        ) : (
-                          seatIndex
-                        )}
-                      </button>,
+                        <span className="material-symbols-outlined text-sm">
+                          {structureMeta.icon}
+                        </span>
+                        {structure.name}
+                      </button>
                     );
+                  })}
+                </div>
+              ) : null}
 
-                    if (
-                      row.aisleEvery > 0 &&
-                      seatIndex < row.seats &&
-                      seatIndex % row.aisleEvery === 0
-                    ) {
-                      seatNodes.push(
-                        <div
-                          key={`${row.id}-aisle-${seatIndex}`}
-                          className="w-4 border-t border-dashed border-white/20"
-                        />,
+              <div className="relative w-full max-w-3xl">
+                {structureGroups.west.length ? (
+                  <div className="absolute right-full top-1/2 mr-3 flex -translate-y-1/2 flex-col items-end gap-1.5">
+                    {structureGroups.west.map((structure) => {
+                      const structureMeta =
+                        STRUCTURE_LIBRARY.find(
+                          (item) => item.type === structure.type,
+                        ) || STRUCTURE_LIBRARY[0];
+                      return (
+                        <button
+                          key={structure.id}
+                          className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
+                            !isPreview && selectedStructureId === structure.id
+                              ? "border-accent bg-accent/15 text-accent"
+                              : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                          }`}
+                          disabled={isPreview}
+                          onClick={() => {
+                            if (isPreview) {
+                              return;
+                            }
+                            setSelectedStructureId(structure.id);
+                          }}
+                          type="button">
+                          <span className="material-symbols-outlined text-sm">
+                            {structureMeta.icon}
+                          </span>
+                          {structure.name}
+                        </button>
                       );
-                    }
-                  }
+                    })}
+                  </div>
+                ) : null}
 
-                  return (
-                    <div
-                      key={row.id}
-                      className={`w-full flex items-center gap-3 rounded-xl px-2.5 py-1.5 transition-all border ${
-                        !isPreview && selectedRowId === row.id
-                          ? "border-accent/60 bg-accent/10"
-                          : isPreview
-                            ? "border-transparent"
-                            : "border-transparent hover:border-white/15 hover:bg-white/5"
-                      }`}
-                      onClick={() => {
-                        if (isPreview) {
-                          return;
-                        }
-                        setSelectedRowId(row.id);
-                        setSelectedSeat(null);
-                      }}>
-                      <span className="text-xs font-bold text-white/50 w-5">
-                        {row.label}
-                      </span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {seatNodes}
+                <div className="space-y-2.5 w-full max-w-3xl">
+                  {editor.rows.map((row) => {
+                    const zone = zoneById(row.zoneId);
+                    const seatNodes = [];
+
+                    for (
+                      let seatIndex = 1;
+                      seatIndex <= row.seats;
+                      seatIndex += 1
+                    ) {
+                      const seatType = getSeatTypeFromRow(row, seatIndex);
+                      const seatZone = zoneById(seatType);
+                      const isAccessible = seatType === "accessible";
+                      const isBench = seatType === "bench";
+                      const isSelectedSeat =
+                        selectedSeat?.rowId === row.id &&
+                        selectedSeat?.number === seatIndex;
+                      seatNodes.push(
+                        <button
+                          key={`${row.id}-seat-${seatIndex}`}
+                          className={`w-6 h-6 rounded-t-md text-[9px] font-bold transition-all ${seatZone.seatClass} ${
+                            isSelectedSeat ? "ring-2 ring-white" : ""
+                          } ${mode === "preview" ? "opacity-85" : ""}`}
+                          disabled={isPreview}
+                          onClick={(event) => {
+                            if (isPreview) {
+                              return;
+                            }
+                            event.stopPropagation();
+                            setSelectedRowId(row.id);
+                            setSelectedSeat({
+                              rowId: row.id,
+                              number: seatIndex,
+                            });
+                          }}
+                          type="button">
+                          {isAccessible ? (
+                            <span className="material-symbols-outlined text-[10px] leading-none">
+                              accessible
+                            </span>
+                          ) : isBench ? (
+                            <span className="material-symbols-outlined text-[10px] leading-none">
+                              weekend
+                            </span>
+                          ) : (
+                            seatIndex
+                          )}
+                        </button>,
+                      );
+
+                      if (
+                        row.aisleEvery > 0 &&
+                        seatIndex < row.seats &&
+                        seatIndex % row.aisleEvery === 0
+                      ) {
+                        seatNodes.push(
+                          <div
+                            key={`${row.id}-aisle-${seatIndex}`}
+                            className="w-4 border-t border-dashed border-white/20"
+                          />,
+                        );
+                      }
+                    }
+
+                    return (
+                      <div
+                        key={row.id}
+                        className={`w-full flex items-center gap-3 rounded-xl px-2.5 py-1.5 transition-all border ${
+                          !isPreview && selectedRowId === row.id
+                            ? "border-accent/60 bg-accent/10"
+                            : isPreview
+                              ? "border-transparent"
+                              : "border-transparent hover:border-white/15 hover:bg-white/5"
+                        }`}
+                        onClick={() => {
+                          if (isPreview) {
+                            return;
+                          }
+                          setSelectedRowId(row.id);
+                          setSelectedSeat(null);
+                        }}>
+                        <span className="text-xs font-bold text-white/50 w-5">
+                          {row.label}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {seatNodes}
+                        </div>
+                        <span
+                          className={`ml-auto text-[10px] font-bold uppercase px-2 py-1 rounded ${zone.chipClass}`}>
+                          {zone.name}
+                        </span>
                       </div>
-                      <span
-                        className={`ml-auto text-[10px] font-bold uppercase px-2 py-1 rounded ${zone.chipClass}`}>
-                        {zone.name}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-1.5 max-w-3xl">
-                {editor.structures.map((structure) => {
-                  const structureMeta =
-                    STRUCTURE_LIBRARY.find(
-                      (item) => item.type === structure.type,
-                    ) || STRUCTURE_LIBRARY[0];
-                  return (
-                    <button
-                      key={structure.id}
-                      className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
-                        !isPreview && selectedStructureId === structure.id
-                          ? "border-accent bg-accent/15 text-accent"
-                          : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
-                      }`}
-                      disabled={isPreview}
-                      onClick={() => {
-                        if (isPreview) {
-                          return;
-                        }
-                        setSelectedStructureId(structure.id);
-                      }}
-                      type="button">
-                      <span className="material-symbols-outlined text-sm">
-                        {structureMeta.icon}
-                      </span>
-                      {structure.name}
-                    </button>
-                  );
-                })}
+              <div className="mt-8 w-full max-w-3xl space-y-2">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
+                  <div />
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {structureGroups.center.map((structure) => {
+                      const structureMeta =
+                        STRUCTURE_LIBRARY.find(
+                          (item) => item.type === structure.type,
+                        ) || STRUCTURE_LIBRARY[0];
+                      return (
+                        <button
+                          key={structure.id}
+                          className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
+                            !isPreview && selectedStructureId === structure.id
+                              ? "border-accent bg-accent/15 text-accent"
+                              : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                          }`}
+                          disabled={isPreview}
+                          onClick={() => {
+                            if (isPreview) {
+                              return;
+                            }
+                            setSelectedStructureId(structure.id);
+                          }}
+                          type="button">
+                          <span className="material-symbols-outlined text-sm">
+                            {structureMeta.icon}
+                          </span>
+                          {structure.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-start gap-1.5">
+                    {structureGroups.east.map((structure) => {
+                      const structureMeta =
+                        STRUCTURE_LIBRARY.find(
+                          (item) => item.type === structure.type,
+                        ) || STRUCTURE_LIBRARY[0];
+                      return (
+                        <button
+                          key={structure.id}
+                          className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
+                            !isPreview && selectedStructureId === structure.id
+                              ? "border-accent bg-accent/15 text-accent"
+                              : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                          }`}
+                          disabled={isPreview}
+                          onClick={() => {
+                            if (isPreview) {
+                              return;
+                            }
+                            setSelectedStructureId(structure.id);
+                          }}
+                          type="button">
+                          <span className="material-symbols-outlined text-sm">
+                            {structureMeta.icon}
+                          </span>
+                          {structure.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {structureGroups.south.length ? (
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {structureGroups.south.map((structure) => {
+                      const structureMeta =
+                        STRUCTURE_LIBRARY.find(
+                          (item) => item.type === structure.type,
+                        ) || STRUCTURE_LIBRARY[0];
+                      return (
+                        <button
+                          key={structure.id}
+                          className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
+                            !isPreview && selectedStructureId === structure.id
+                              ? "border-accent bg-accent/15 text-accent"
+                              : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                          }`}
+                          disabled={isPreview}
+                          onClick={() => {
+                            if (isPreview) {
+                              return;
+                            }
+                            setSelectedStructureId(structure.id);
+                          }}
+                          type="button">
+                          <span className="material-symbols-outlined text-sm">
+                            {structureMeta.icon}
+                          </span>
+                          {structure.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1390,7 +1571,7 @@ export default function CreateRoomTemplatePage() {
                           updateSelectedStructure("side", event.target.value)
                         }
                         value={selectedStructure.side}>
-                        {SIDES.map((side) => (
+                        {STRUCTURE_SIDE_OPTIONS.map((side) => (
                           <option key={side} value={side}>
                             {side.toUpperCase()}
                           </option>

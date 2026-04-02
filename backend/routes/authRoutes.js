@@ -31,7 +31,7 @@ router.post(
 );
 router.post("/login", login);
 router.post("/google", googleAuth);
-router.post("/forgot-password", forgotPassword);
+router.post(" ", forgotPassword);
 router.get("/reset-password/:token", validateResetToken);
 router.post("/reset-password/:token", resetPassword);
 router.get("/organizer-verify/:token", loginViaOrganizerApprovalLink);

@@ -32,6 +32,7 @@ const ZONE_BADGE_CLASS = {
 
 const STRUCTURE_ICON = {
   entrance: "door_front",
+  exit: "door_back",
   food: "local_dining",
   bar: "local_bar",
   shelter: "roofing",
