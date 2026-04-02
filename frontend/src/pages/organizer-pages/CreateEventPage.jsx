@@ -4,6 +4,7 @@ import { useSelector } from "react-redux";
 
 import OrganizerPageFrame from "../../components/organizer/OrganizerPageFrame";
 import { getPublishedVenueTemplates } from "../../api/venueTemplateApi";
+import { createOrganizerEvent } from "../../api/eventApi";
 import MiniVenueMap from "../../components/organizer/MiniVenueMap";
 
 const STEPS = [
@@ -24,8 +25,8 @@ const STEPS = [
   },
   {
     id: 4,
-    title: "Room Setup",
-    subtitle: "Hall configuration",
+    title: "Media (Optional)",
+    subtitle: "Gallery images and teaser",
   },
 ];
 
@@ -33,14 +34,18 @@ const STEPPER_ITEMS = [
   { id: 1, label: "Movie", icon: "movie" },
   { id: 2, label: "Venue", icon: "location_on" },
   { id: 3, label: "Price", icon: "payments" },
-  { id: 4, label: "Room", icon: "event_seat" },
+  { id: 4, label: "Media", icon: "photo_library" },
 ];
 
 const CREATE_EVENT_DRAFT_STORAGE_KEY = "organizer_create_event_draft_v1";
 const ADMIN_VALIDATION_QUEUE_STORAGE_KEY = "admin_event_validation_queue";
+const ORGANIZER_EVENTS_STORAGE_KEY = "organizer_events_store_v1";
 const SERVICE_FEE_RATE = 0.075;
 const MAX_POSTER_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_GALLERY_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_GALLERY_IMAGES = 8;
 const ALLOWED_POSTER_TYPES = ["image/jpeg", "image/png"];
+const ALLOWED_GALLERY_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const CHARITY_ASSOCIATIONS = [
   "Amal Childhood Association",
@@ -115,10 +120,9 @@ const INITIAL_FORM_STATE = {
   isCharityEvent: false,
   charityAssociation: "",
   minimumDonationSuggestion: "",
-  roomName: "",
-  totalSeats: "",
-  screenFormat: "2D",
-  wheelchairAccess: true,
+  galleryFiles: [],
+  galleryPreviewUrls: [],
+  teaserUrl: "",
 };
 
 function parsePositivePrice(value) {
@@ -272,6 +276,8 @@ export default function CreateEventPage() {
         ...parsedDraft,
         posterFile: null,
         posterPreviewUrl: "",
+        galleryFiles: [],
+        galleryPreviewUrls: [],
       }));
       setDraftSavedAt(parsedDraft._savedAt || null);
       hydratedDraftRef.current = true;
@@ -290,6 +296,8 @@ export default function CreateEventPage() {
         ...form,
         posterFile: null,
         posterPreviewUrl: "",
+        galleryFiles: [],
+        galleryPreviewUrls: [],
         _savedAt: new Date().toISOString(),
       };
 
@@ -308,8 +316,11 @@ export default function CreateEventPage() {
       if (form.posterPreviewUrl) {
         URL.revokeObjectURL(form.posterPreviewUrl);
       }
+      form.galleryPreviewUrls.forEach((previewUrl) => {
+        URL.revokeObjectURL(previewUrl);
+      });
     };
-  }, [form.posterPreviewUrl]);
+  }, [form.posterPreviewUrl, form.galleryPreviewUrls]);
 
   const setField = (field, value) => {
     setError("");
@@ -364,6 +375,46 @@ export default function CreateEventPage() {
         ...previous,
         posterFile: file,
         posterPreviewUrl: nextPreviewUrl,
+      };
+    });
+  };
+
+  const handleGalleryUpload = (event) => {
+    const files = Array.from(event.target.files || []);
+    setError("");
+
+    if (!files.length) {
+      return;
+    }
+
+    if (files.length > MAX_GALLERY_IMAGES) {
+      setError(`You can upload up to ${MAX_GALLERY_IMAGES} gallery images.`);
+      event.target.value = "";
+      return;
+    }
+
+    for (const file of files) {
+      if (!ALLOWED_GALLERY_TYPES.includes(file.type)) {
+        setError("Invalid gallery image format. Use JPG, PNG, or WEBP.");
+        event.target.value = "";
+        return;
+      }
+      if (file.size > MAX_GALLERY_IMAGE_SIZE_BYTES) {
+        setError("Each gallery image must be 5MB or less.");
+        event.target.value = "";
+        return;
+      }
+    }
+
+    setForm((previous) => {
+      previous.galleryPreviewUrls.forEach((previewUrl) => {
+        URL.revokeObjectURL(previewUrl);
+      });
+
+      return {
+        ...previous,
+        galleryFiles: files,
+        galleryPreviewUrls: files.map((file) => URL.createObjectURL(file)),
       };
     });
   };
@@ -473,16 +524,6 @@ export default function CreateEventPage() {
     return "";
   };
 
-  const validateStep4 = () => {
-    if (!form.roomName.trim()) {
-      return "Room name is required.";
-    }
-    if (!form.totalSeats || Number(form.totalSeats) <= 0) {
-      return "Total seats must be greater than 0.";
-    }
-    return "";
-  };
-
   const validateCurrentStep = () => {
     if (step === 1) {
       return validateStep1();
@@ -490,10 +531,7 @@ export default function CreateEventPage() {
     if (step === 2) {
       return validateStep2();
     }
-    if (step === 3) {
-      return validateStep3();
-    }
-    return validateStep4();
+    return validateStep3();
   };
 
   const handleNextStep = () => {
@@ -516,13 +554,8 @@ export default function CreateEventPage() {
     setDraftSavedAt(null);
   };
 
-  const handleSubmitForValidation = () => {
-    const validators = [
-      validateStep1,
-      validateStep2,
-      validateStep3,
-      validateStep4,
-    ];
+  const handleSubmitForValidation = async () => {
+    const validators = [validateStep1, validateStep2, validateStep3];
     for (const validator of validators) {
       const possibleError = validator();
       if (possibleError) {
@@ -532,11 +565,32 @@ export default function CreateEventPage() {
     }
 
     const nowIso = new Date().toISOString();
+    const normalizedOrganizerId =
+      currentUser?._id || currentUser?.id || "anonymous-organizer";
+    const inferredSeatsFromRows = Array.isArray(selectedVenue?.rowItems)
+      ? selectedVenue.rowItems.reduce(
+          (total, row) => total + Math.max(0, Number(row?.seats) || 0),
+          0,
+        )
+      : 0;
+    const resolvedSeatCapacity =
+      Number(selectedVenue?.capacity) > 0
+        ? Number(selectedVenue.capacity)
+        : inferredSeatsFromRows > 0
+          ? inferredSeatsFromRows
+          : null;
+    const inferredWheelchairSeats = Array.isArray(selectedVenue?.rowItems)
+      ? selectedVenue.rowItems.reduce(
+          (total, row) => total + Math.max(0, Number(row?.wheelchair) || 0),
+          0,
+        )
+      : 0;
+
     const payload = {
       id: `submission-${Date.now()}`,
       submittedAt: nowIso,
       submittedBy: {
-        organizerId: currentUser?._id || currentUser?.id || null,
+        organizerId: normalizedOrganizerId,
         organizerName: currentUser?.name || "Organizer",
         organizationName:
           currentUser?.organizerProfile?.organizationName || "Organization",
@@ -564,6 +618,12 @@ export default function CreateEventPage() {
         venueTemplateName: selectedVenue?.name || "",
         location: selectedVenue?.location || "",
       },
+      venueSnapshot: {
+        screenLabel: selectedVenue?.screenLabel || "SCREEN",
+        rows: Array.isArray(selectedVenue?.rowItems)
+          ? selectedVenue.rowItems
+          : [],
+      },
       pricing: {
         currency: "TND",
         isFreeEvent: form.isFreeEvent,
@@ -590,13 +650,26 @@ export default function CreateEventPage() {
           ? Number(form.minimumDonationSuggestion)
           : null,
       },
+      media: {
+        teaserUrl: form.teaserUrl ? form.teaserUrl.trim() : "",
+        galleryImageFileNames: form.galleryFiles.map((file) => file.name),
+      },
       roomConfiguration: {
-        roomName: form.roomName.trim(),
-        totalSeats: Number(form.totalSeats),
-        screenFormat: form.screenFormat,
-        wheelchairAccess: form.wheelchairAccess,
+        source: "admin_venue_template",
+        venueTemplateName: selectedVenue?.name || "",
+        totalSeats: resolvedSeatCapacity,
+        rows: Number(selectedVenue?.rows) || 0,
+        wheelchairSeats: inferredWheelchairSeats,
+        screenLabel: selectedVenue?.screenLabel || "SCREEN",
       },
     };
+
+    try {
+      await createOrganizerEvent(payload, form.posterFile);
+    } catch (submitError) {
+      setError(submitError.message || "Failed to submit event to backend.");
+      return;
+    }
 
     const queued = JSON.parse(
       localStorage.getItem(ADMIN_VALIDATION_QUEUE_STORAGE_KEY) || "[]",
@@ -605,6 +678,31 @@ export default function CreateEventPage() {
     localStorage.setItem(
       ADMIN_VALIDATION_QUEUE_STORAGE_KEY,
       JSON.stringify(queued),
+    );
+
+    const organizerEventRecord = {
+      id: `event-${Date.now()}`,
+      createdAt: nowIso,
+      status: payload.status,
+      organizerId: normalizedOrganizerId,
+      organizerName: payload.submittedBy.organizerName,
+      organizationName: payload.submittedBy.organizationName,
+      movie: payload.movie,
+      projection: payload.projection,
+      venue: payload.venue,
+      pricing: payload.pricing,
+      charity: payload.charity,
+      media: payload.media,
+      roomConfiguration: payload.roomConfiguration,
+    };
+
+    const organizerEvents = JSON.parse(
+      localStorage.getItem(ORGANIZER_EVENTS_STORAGE_KEY) || "[]",
+    );
+    organizerEvents.unshift(organizerEventRecord);
+    localStorage.setItem(
+      ORGANIZER_EVENTS_STORAGE_KEY,
+      JSON.stringify(organizerEvents),
     );
 
     clearDraft();
@@ -689,33 +787,49 @@ export default function CreateEventPage() {
             />
           </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-white/80">
-              Movie poster (JPG/PNG, max 5MB) *
-            </span>
-            <input
-              accept="image/jpeg,image/png"
-              onChange={handlePosterUpload}
-              className="block w-full rounded-xl border border-dashed border-white/20 bg-background-dark p-3 text-sm text-white/80 file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-xs file:font-black file:text-charcoal"
-              type="file"
-            />
-            <p className="text-xs text-white/40">
-              The uploaded image cannot be auto-restored after browser restart.
-            </p>
-          </label>
+          <div className="md:col-span-2 rounded-2xl border border-white/10 bg-background-dark/70 p-4">
+            <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
+              <label className="space-y-2">
+                <span className="text-sm font-semibold text-white/80">
+                  Movie poster (JPG/PNG, max 5MB) *
+                </span>
+                <input
+                  accept="image/jpeg,image/png"
+                  onChange={handlePosterUpload}
+                  className="block w-full rounded-xl border border-dashed border-white/20 bg-background-dark p-3 text-sm text-white/80 file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-xs file:font-black file:text-charcoal"
+                  type="file"
+                />
+                <p className="text-xs text-white/40">
+                  Best result: portrait poster ratio close to 2:3.
+                </p>
+                <p className="text-xs text-white/40">
+                  The uploaded image cannot be auto-restored after browser
+                  restart.
+                </p>
+              </label>
 
-          {form.posterPreviewUrl && (
-            <div className="md:col-span-2">
-              <p className="mb-2 text-xs uppercase tracking-wider text-white/50">
-                Poster preview
-              </p>
-              <img
-                src={form.posterPreviewUrl}
-                alt="Poster preview"
-                className="h-56 w-full rounded-xl border border-white/10 object-cover"
-              />
+              <div>
+                <p className="mb-2 text-xs uppercase tracking-wider text-white/50">
+                  Poster preview
+                </p>
+                <div className="mx-auto w-full max-w-[210px]">
+                  <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-white/15 bg-charcoal shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
+                    {form.posterPreviewUrl ? (
+                      <img
+                        src={form.posterPreviewUrl}
+                        alt="Poster preview"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/25 via-background-dark to-accent/20 px-4 text-center text-xs font-bold uppercase tracking-wider text-white/70">
+                        No poster yet
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
         </div>
       );
     }
@@ -1065,62 +1179,58 @@ export default function CreateEventPage() {
     }
 
     return (
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-white/10 bg-background-dark/70 p-4">
+          <p className="text-sm font-semibold text-white">Gallery images</p>
+          <p className="mt-1 text-xs text-white/50">
+            Optional. Add up to {MAX_GALLERY_IMAGES} images (JPG/PNG/WEBP, max
+            5MB each).
+          </p>
+          <input
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            onChange={handleGalleryUpload}
+            className="mt-3 block w-full rounded-xl border border-dashed border-white/20 bg-background-dark p-3 text-sm text-white/80 file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-xs file:font-black file:text-charcoal"
+            type="file"
+          />
+          <p className="mt-2 text-xs text-white/40">
+            Gallery images cannot be auto-restored after browser restart.
+          </p>
+        </div>
+
+        {form.galleryPreviewUrls.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs uppercase tracking-wider text-white/50">
+              Gallery preview
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {form.galleryPreviewUrls.map((previewUrl, index) => (
+                <img
+                  key={`${previewUrl}-${index}`}
+                  src={previewUrl}
+                  alt={`Gallery preview ${index + 1}`}
+                  className="h-32 w-full rounded-xl border border-white/10 object-cover"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         <label className="space-y-2">
           <span className="text-sm font-semibold text-white/80">
-            Room name *
+            Teaser URL
           </span>
           <input
-            name="roomName"
-            value={form.roomName}
+            name="teaserUrl"
+            value={form.teaserUrl}
             onChange={handleTextInput}
             className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-            placeholder="Room 1"
-            type="text"
+            placeholder="https://www.youtube.com/watch?v=..."
+            type="url"
           />
-        </label>
-
-        <label className="space-y-2">
-          <span className="text-sm font-semibold text-white/80">
-            Total seats *
-          </span>
-          <input
-            name="totalSeats"
-            value={form.totalSeats}
-            onChange={handleTextInput}
-            className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-            min="1"
-            placeholder="200"
-            type="number"
-          />
-        </label>
-
-        <label className="space-y-2">
-          <span className="text-sm font-semibold text-white/80">
-            Screen format
-          </span>
-          <select
-            name="screenFormat"
-            value={form.screenFormat}
-            onChange={handleTextInput}
-            className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent">
-            <option value="2D">2D</option>
-            <option value="3D">3D</option>
-            <option value="IMAX">IMAX</option>
-            <option value="4DX">4DX</option>
-          </select>
-        </label>
-
-        <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-background-dark p-4 md:mt-7">
-          <input
-            checked={form.wheelchairAccess}
-            name="wheelchairAccess"
-            onChange={handleTextInput}
-            type="checkbox"
-          />
-          <span className="text-sm font-semibold text-white">
-            Wheelchair seats available
-          </span>
+          <p className="text-xs text-white/50">
+            Optional link to YouTube, Vimeo, or another teaser host.
+          </p>
         </label>
       </div>
     );

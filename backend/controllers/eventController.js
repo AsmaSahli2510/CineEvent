@@ -1,5 +1,132 @@
-const Event = require('../models/Event');
-const { paginate, buildPaginationMeta } = require('../utils/helpers');
+const Event = require("../models/Event");
+const { paginate, buildPaginationMeta } = require("../utils/helpers");
+
+const parsePositiveNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const buildOrganizerEventDocument = (payload, user, uploadedPosterUrl) => {
+  const projection = payload?.projection || {};
+  const venue = payload?.venue || {};
+  const roomConfiguration = payload?.roomConfiguration || {};
+  const pricing = payload?.pricing || {};
+  const movie = payload?.movie || {};
+  const categories = pricing?.categories || {};
+
+  const categoryCandidates = [
+    parsePositiveNumber(categories.normal),
+    parsePositiveNumber(categories.student),
+    parsePositiveNumber(categories.senior),
+  ].filter((value) => value > 0);
+
+  const basePrice = pricing?.isFreeEvent
+    ? 0
+    : pricing?.pricingMode === "byCategory"
+      ? categoryCandidates[0] || 0
+      : parsePositiveNumber(pricing.singlePrice);
+
+  const dateFromIso = projection?.dateTimeIso
+    ? new Date(projection.dateTimeIso)
+    : null;
+  const dateFromSplit =
+    projection?.date && projection?.time
+      ? new Date(`${projection.date}T${projection.time}`)
+      : null;
+  const fallbackDate = payload?.submittedAt
+    ? new Date(payload.submittedAt)
+    : new Date();
+  const resolvedDate =
+    dateFromIso && !Number.isNaN(dateFromIso.valueOf())
+      ? dateFromIso
+      : dateFromSplit && !Number.isNaN(dateFromSplit.valueOf())
+        ? dateFromSplit
+        : fallbackDate;
+
+  const totalSeats = Math.max(
+    1,
+    parseInt(roomConfiguration.totalSeats || 0, 10) || 1,
+  );
+
+  return {
+    organizer: user?._id,
+    submittedByName:
+      payload?.submittedBy?.organizerName || user?.name || "Organizer",
+    organizationName:
+      payload?.submittedBy?.organizationName ||
+      user?.organizerProfile?.organizationName ||
+      "",
+    movieDetails: {
+      title: String(movie.title || "").trim(),
+      genre: String(movie.genre || "").trim(),
+      durationMinutes: parseInt(movie.durationMinutes || 0, 10) || 0,
+      synopsis: String(movie.synopsis || "").trim(),
+      director: String(movie.director || "").trim(),
+      posterFileName: String(movie.posterFileName || "").trim(),
+      posterUrl: String(uploadedPosterUrl || movie.posterUrl || "").trim(),
+      posterDataUrl: String(movie.posterDataUrl || "").trim(),
+    },
+    cinema: String(
+      venue.venueTemplateName || venue.location || "Organizer Venue",
+    ).trim(),
+    hall: String(
+      roomConfiguration.venueTemplateName || venue.venueType || "Main Hall",
+    ).trim(),
+    date: resolvedDate,
+    startTime: String(projection.time || "").trim() || "00:00",
+    endTime: "",
+    totalSeats,
+    price: basePrice,
+    status: "pending_validation",
+    venueDetails: {
+      venueTemplateId: String(venue.venueTemplateId || ""),
+      venueTemplateName: String(venue.venueTemplateName || ""),
+      location: String(venue.location || ""),
+      venueType: String(venue.venueType || ""),
+    },
+    venueSnapshot: {
+      screenLabel: String(
+        payload?.venueSnapshot?.screenLabel ||
+          roomConfiguration?.screenLabel ||
+          "SCREEN",
+      ),
+      rows: Array.isArray(payload?.venueSnapshot?.rows)
+        ? payload.venueSnapshot.rows
+        : [],
+    },
+    pricingDetails: {
+      currency: String(pricing.currency || "TND"),
+      isFreeEvent: Boolean(pricing.isFreeEvent),
+      pricingMode: String(pricing.pricingMode || "unique"),
+      singlePrice: parsePositiveNumber(pricing.singlePrice),
+      categories: {
+        normal: parsePositiveNumber(categories.normal),
+        student: parsePositiveNumber(categories.student),
+        senior: parsePositiveNumber(categories.senior),
+      },
+      serviceFeeRate: Number(pricing.serviceFeeRate || 0),
+      serviceFee: Number(pricing.serviceFee || 0),
+      spectatorTotal: Number(pricing.spectatorTotal || 0),
+    },
+    charity: {
+      isCharityEvent: Boolean(payload?.charity?.isCharityEvent),
+      beneficiaryAssociation: String(
+        payload?.charity?.beneficiaryAssociation || "",
+      ),
+      minimumDonationSuggestion: Number(
+        payload?.charity?.minimumDonationSuggestion || 0,
+      ),
+    },
+    media: {
+      teaserUrl: String(payload?.media?.teaserUrl || ""),
+      galleryImageFileNames: Array.isArray(
+        payload?.media?.galleryImageFileNames,
+      )
+        ? payload.media.galleryImageFileNames
+        : [],
+    },
+  };
+};
 
 // @desc    Get all events
 // @route   GET /api/events
@@ -21,7 +148,7 @@ const getEvents = async (req, res) => {
 
     const total = await Event.countDocuments(filter);
     const events = await Event.find(filter)
-      .populate('movie', 'title poster duration')
+      .populate("movie", "title poster duration")
       .skip(skip)
       .limit(parseInt(limit))
       .sort({ date: 1 });
@@ -40,9 +167,9 @@ const getEvents = async (req, res) => {
 // @access  Public
 const getEventById = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id).populate('movie');
+    const event = await Event.findById(req.params.id).populate("movie");
     if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
+      return res.status(404).json({ message: "Event not found" });
     }
     res.json(event);
   } catch (error) {
@@ -50,12 +177,69 @@ const getEventById = async (req, res) => {
   }
 };
 
+// @desc    Get current organizer events
+// @route   GET /api/events/mine
+// @access  Private/Organizer/Admin
+const getMyEvents = async (req, res) => {
+  try {
+    if (
+      !req.user ||
+      (req.user.role !== "organizer" && req.user.role !== "admin")
+    ) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const filter =
+      req.user.role === "organizer" ? { organizer: req.user._id } : {};
+    const events = await Event.find(filter).sort({ createdAt: -1 });
+    res.json({ events });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Create an event
 // @route   POST /api/events
-// @access  Private/Admin
+// @access  Private/Organizer/Admin
 const createEvent = async (req, res) => {
   try {
-    const event = await Event.create(req.body);
+    if (
+      !req.user ||
+      (req.user.role !== "organizer" && req.user.role !== "admin")
+    ) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    let parsedBody = req.body;
+    if (typeof req.body?.payload === "string") {
+      try {
+        parsedBody = JSON.parse(req.body.payload);
+      } catch {
+        return res
+          .status(400)
+          .json({ message: "Invalid event payload format" });
+      }
+    }
+
+    const uploadedPosterUrl = req.file
+      ? `${req.protocol}://${req.get("host")}/uploads/event-posters/${req.file.filename}`
+      : "";
+
+    const isOrganizerSubmissionPayload = Boolean(
+      parsedBody?.movie && parsedBody?.projection && parsedBody?.venue,
+    );
+    const payload =
+      req.user.role === "organizer" && isOrganizerSubmissionPayload
+        ? buildOrganizerEventDocument(parsedBody, req.user, uploadedPosterUrl)
+        : parsedBody;
+
+    if (req.user.role === "organizer" && !isOrganizerSubmissionPayload) {
+      return res
+        .status(400)
+        .json({ message: "Invalid organizer event payload" });
+    }
+
+    const event = await Event.create(payload);
     res.status(201).json(event);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -72,7 +256,7 @@ const updateEvent = async (req, res) => {
       runValidators: true,
     });
     if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
+      return res.status(404).json({ message: "Event not found" });
     }
     res.json(event);
   } catch (error) {
@@ -87,12 +271,19 @@ const deleteEvent = async (req, res) => {
   try {
     const event = await Event.findByIdAndDelete(req.params.id);
     if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
+      return res.status(404).json({ message: "Event not found" });
     }
-    res.json({ message: 'Event removed' });
+    res.json({ message: "Event removed" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-module.exports = { getEvents, getEventById, createEvent, updateEvent, deleteEvent };
+module.exports = {
+  getEvents,
+  getEventById,
+  getMyEvents,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+};

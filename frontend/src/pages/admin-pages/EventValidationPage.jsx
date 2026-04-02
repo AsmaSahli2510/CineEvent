@@ -1,45 +1,397 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import AdminPageFrame from "../../components/admin/AdminPageFrame";
+import { getEvents, updateEvent } from "../../api/eventApi";
+import { getPublishedVenueTemplateById } from "../../api/venueTemplateApi";
+import MiniVenueMap from "../../components/organizer/MiniVenueMap";
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+function formatDateTime(date, startTime) {
+  if (!date) {
+    return "-";
+  }
+
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.valueOf())) {
+    return "-";
+  }
+
+  const datePart = parsed.toLocaleDateString();
+  return startTime ? `${datePart} ${startTime}` : datePart;
+}
+
+function formatTimeAgo(dateValue) {
+  if (!dateValue) {
+    return "Recently";
+  }
+
+  const eventDate = new Date(dateValue).getTime();
+  const diffMinutes = Math.max(1, Math.floor((Date.now() - eventDate) / 60000));
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
+function resolvePoster(event) {
+  const rawPoster =
+    event?.movieDetails?.posterUrl ||
+    event?.movieDetails?.posterDataUrl ||
+    event?.movie?.poster ||
+    "";
+
+  if (!rawPoster) {
+    return "";
+  }
+
+  if (
+    rawPoster.startsWith("http://") ||
+    rawPoster.startsWith("https://") ||
+    rawPoster.startsWith("data:") ||
+    rawPoster.startsWith("blob:")
+  ) {
+    return rawPoster;
+  }
+
+  if (rawPoster.startsWith("/")) {
+    return `${API_BASE_URL}${rawPoster}`;
+  }
+
+  return `${API_BASE_URL}/${rawPoster}`;
+}
+
+function getPriceRows(event) {
+  const details = event?.pricingDetails || {};
+  if (details?.isFreeEvent) {
+    return [{ label: "Free Admission", value: "Free" }];
+  }
+
+  if (details?.pricingMode === "byCategory") {
+    return [
+      {
+        label: "Standard Admission",
+        value: `${Number(details?.categories?.normal || 0).toFixed(3)} TND`,
+      },
+      {
+        label: "Student",
+        value: `${Number(details?.categories?.student || 0).toFixed(3)} TND`,
+      },
+      {
+        label: "Senior",
+        value: `${Number(details?.categories?.senior || 0).toFixed(3)} TND`,
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "Standard Admission",
+      value: `${Number(details?.singlePrice || event?.price || 0).toFixed(3)} TND`,
+    },
+  ];
+}
+
+const PAGE_STYLES = `
+      .event-validation-page {
+        font-family: 'Spline Sans', sans-serif;
+      }
+
+      .event-validation-page .custom-scrollbar::-webkit-scrollbar {
+        width: 5px;
+      }
+
+      .event-validation-page .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .event-validation-page .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #800020;
+        border-radius: 10px;
+      }
+
+      .event-validation-page .sidebar-link.active {
+        background: rgba(128, 0, 32, 0.2);
+        border-right: 3px solid #F5C065;
+        color: #F5C065;
+      }
+
+      .event-validation-page .event-card.active {
+        border-color: #F5C065;
+        background: rgba(245, 192, 101, 0.05);
+      }
+`;
 
 export default function EventValidationPage() {
+  const [events, setEvents] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [selectedVenueTemplate, setSelectedVenueTemplate] = useState(null);
+  const [loadingVenueTemplate, setLoadingVenueTemplate] = useState(false);
+
+  const loadPendingEvents = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const result = await getEvents({
+        status: "pending_validation",
+        limit: 100,
+      });
+      const pending = Array.isArray(result?.events) ? result.events : [];
+      setEvents(pending);
+      setSelectedId((previous) => {
+        if (previous && pending.some((event) => event._id === previous)) {
+          return previous;
+        }
+        return pending[0]?._id || null;
+      });
+    } catch (loadError) {
+      setEvents([]);
+      setSelectedId(null);
+      setError(loadError.message || "Failed to load pending event submissions");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPendingEvents();
+  }, []);
+
+  const filteredEvents = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) {
+      return events;
+    }
+
+    return events.filter((event) => {
+      const title = String(event?.movieDetails?.title || "").toLowerCase();
+      const organization = String(
+        event?.organizationName || event?.submittedByName || "",
+      ).toLowerCase();
+      const venue = String(
+        event?.venueDetails?.venueTemplateName || event?.cinema || "",
+      ).toLowerCase();
+      return (
+        title.includes(query) ||
+        organization.includes(query) ||
+        venue.includes(query)
+      );
+    });
+  }, [events, searchTerm]);
+
+  const selectedEvent = useMemo(() => {
+    return (
+      filteredEvents.find((event) => event._id === selectedId) ||
+      filteredEvents[0] ||
+      null
+    );
+  }, [filteredEvents, selectedId]);
+
+  const handleStatusUpdate = async (nextStatus) => {
+    if (!selectedEvent?._id) {
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      setActionError("");
+      await updateEvent(selectedEvent._id, { status: nextStatus });
+      await loadPendingEvents();
+    } catch (updateError) {
+      setActionError(updateError.message || "Failed to update event status");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSelectedVenueTemplate = async () => {
+      const templateId = selectedEvent?.venueDetails?.venueTemplateId;
+      if (!templateId) {
+        setSelectedVenueTemplate(null);
+        return;
+      }
+
+      try {
+        setLoadingVenueTemplate(true);
+        const result = await getPublishedVenueTemplateById(templateId);
+        if (!isMounted) {
+          return;
+        }
+
+        setSelectedVenueTemplate(result?.template || null);
+      } catch {
+        if (isMounted) {
+          setSelectedVenueTemplate(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingVenueTemplate(false);
+        }
+      }
+    };
+
+    loadSelectedVenueTemplate();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedEvent?._id, selectedEvent?.venueDetails?.venueTemplateId]);
+
+  const selectedPrices = selectedEvent ? getPriceRows(selectedEvent) : [];
+  const seatRowsForPreview =
+    Array.isArray(selectedEvent?.venueSnapshot?.rows) &&
+    selectedEvent.venueSnapshot.rows.length > 0
+      ? selectedEvent.venueSnapshot.rows
+      : Array.isArray(selectedVenueTemplate?.rows)
+        ? selectedVenueTemplate.rows
+        : [];
+  const screenLabelForPreview =
+    selectedEvent?.venueSnapshot?.screenLabel ||
+    selectedVenueTemplate?.screenLabel ||
+    "SCREEN";
+  const selectedPoster = resolvePoster(selectedEvent || {});
+  const isQueueEmpty = !loading && !error && filteredEvents.length === 0;
+
+  if (isQueueEmpty) {
+    return (
+      <>
+        <style>{PAGE_STYLES}</style>
+
+        <div className="event-validation-page bg-background-dark text-white min-h-screen">
+          <AdminPageFrame
+            title="Event Validation"
+            subtitle="Review pending event submissions">
+            <div className="flex h-[calc(100vh-120px)] overflow-hidden p-2.5 md:p-3 gap-3">
+              <aside className="w-[30%] min-w-[280px] flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-black text-white">
+                      Validation Queue
+                    </h2>
+                    <p className="text-white/50 text-xs">
+                      Reviewing 0 pending event submission(s)
+                    </p>
+                  </div>
+                  <button
+                    className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all"
+                    onClick={loadPendingEvents}
+                    type="button">
+                    <span className="material-symbols-outlined text-accent">
+                      refresh
+                    </span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 overflow-y-auto custom-scrollbar pr-2 max-h-[calc(100vh-220px)]">
+                  <div className="rounded-xl border border-accent/20 bg-gradient-to-b from-accent/10 to-transparent p-5">
+                    <div className="flex items-start gap-2.5">
+                      <div className="rounded-lg bg-accent/20 p-2">
+                        <span className="material-symbols-outlined text-accent">
+                          fact_check
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-white">
+                          Queue is clear
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-white/60">
+                          There are currently no event submissions waiting for
+                          validation.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 transition-colors hover:bg-white/10"
+                      onClick={loadPendingEvents}
+                      type="button">
+                      <span className="material-symbols-outlined text-sm">
+                        refresh
+                      </span>
+                      Check Again
+                    </button>
+                  </div>
+                </div>
+              </aside>
+
+              <main className="flex-1 flex items-center justify-center">
+                <div className="h-full w-full rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/10 via-white/0 to-transparent p-6 flex flex-col items-center justify-center text-center">
+                  <div className="mb-3 rounded-full border border-accent/30 bg-accent/15 p-3">
+                    <span className="material-symbols-outlined text-4xl text-accent">
+                      task_alt
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-bold text-white">
+                    All Event Submissions Reviewed
+                  </h3>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/60">
+                    Great work. No event is currently waiting for approval or
+                    rejection. New submissions will appear here automatically.
+                  </p>
+
+                  <div className="mt-6 grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-left">
+                      <p className="text-[11px] uppercase tracking-wider text-white/45">
+                        Queue Status
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-accent">
+                        0 pending submissions
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-left">
+                      <p className="text-[11px] uppercase tracking-wider text-white/45">
+                        Suggested Action
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-white/80">
+                        Recheck queue in a few minutes
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    className="mt-5 inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-1.5 text-sm font-semibold text-white/85 transition-colors hover:bg-white/10"
+                    onClick={loadPendingEvents}
+                    type="button">
+                    <span className="material-symbols-outlined text-sm">
+                      refresh
+                    </span>
+                    Refresh Validation Queue
+                  </button>
+                </div>
+              </main>
+            </div>
+          </AdminPageFrame>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      <style>{`
-				.event-validation-page {
-					font-family: 'Spline Sans', sans-serif;
-				}
-
-				.event-validation-page .custom-scrollbar::-webkit-scrollbar {
-					width: 5px;
-				}
-
-				.event-validation-page .custom-scrollbar::-webkit-scrollbar-track {
-					background: rgba(255, 255, 255, 0.05);
-				}
-
-				.event-validation-page .custom-scrollbar::-webkit-scrollbar-thumb {
-					background: #800020;
-					border-radius: 10px;
-				}
-
-				.event-validation-page .sidebar-link.active {
-					background: rgba(128, 0, 32, 0.2);
-					border-right: 3px solid #F5C065;
-					color: #F5C065;
-				}
-
-				.event-validation-page .event-card.active {
-					border-color: #F5C065;
-					background: rgba(245, 192, 101, 0.05);
-				}
-			`}</style>
+      <style>{PAGE_STYLES}</style>
 
       <div className="event-validation-page bg-background-dark text-white min-h-screen">
         <AdminPageFrame
           title="Event Validation"
           subtitle="Review pending event submissions">
-          <div className="flex h-screen overflow-hidden">
+          <div className="flex h-[calc(100vh-120px)] overflow-hidden">
             <aside className="hidden w-64 flex-shrink-0 bg-charcoal border-r border-white/5 flex-col">
               <div className="p-8">
                 <div className="flex items-center gap-3">
@@ -109,131 +461,141 @@ export default function EventValidationPage() {
               </div>
             </aside>
 
-            <aside className="w-80 flex-shrink-0 border-r border-white/5 flex flex-col bg-black/20">
-              <div className="p-6 border-b border-white/5">
-                <h2 className="text-sm font-bold uppercase tracking-widest text-white/40 mb-4">
-                  Awaiting Review (12)
+            <aside className="w-72 flex-shrink-0 border-r border-white/5 flex flex-col bg-black/20">
+              <div className="p-4 border-b border-white/5">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">
+                  Awaiting Review ({filteredEvents.length})
                 </h2>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">
                     search
                   </span>
                   <input
-                    className="w-full bg-white/5 border-white/10 rounded-lg pl-10 pr-4 py-2 text-xs focus:border-accent focus:ring-0"
+                    className="w-full bg-white/5 border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-[11px] focus:border-accent focus:ring-0"
                     placeholder="Search events..."
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
                     type="text"
                   />
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-                <div className="event-card active border border-white/10 p-4 rounded-xl cursor-pointer transition-all hover:bg-white/5">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30 uppercase tracking-tighter">
-                      High Priority
-                    </span>
-                    <span className="text-[10px] text-white/40">2h ago</span>
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+                {loading ? (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/60">
+                    Loading pending submissions...
                   </div>
-                  <h3 className="text-sm font-bold text-accent mb-1">
-                    Interstellar: 10th Anniversary
-                  </h3>
-                  <p className="text-xs text-white/60 mb-3 truncate">
-                    Grand Cinema Hall • IMAX Experience
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-5 h-5 rounded-full bg-cover bg-center"
-                      style={{
-                        backgroundImage:
-                          "url('https://lh3.googleusercontent.com/aida-public/AB6AXuBtNM216UREDZ1r9Uiamx_r5zDa91f1tXWsp808sdBZMm2jl4Gc_jibiFOyIeB5R6H4ye349qZ6kYlCpDP0EmR7zpqMWlVbZpLgj3IeKmls9pk5liLqFnaeJNYlslC43QXXvs6NLFQgXcH3UVRXA5NJb2wd75tcH3iY51sQ74lvFttytzk0mATrShhsSS923oQZt26K5DcK3TMYt4zFlOJsFA9CS7HIlw6CSwYkeh85snBGW4t-qm8HQGOZWnROvKljEQBCcO605BEM')",
-                      }}
-                    />
-                    <span className="text-[10px] text-white/40 font-medium">
-                      Warner Bros. Events
-                    </span>
-                  </div>
-                </div>
+                ) : null}
 
-                <div className="event-card border border-white/5 p-4 rounded-xl cursor-pointer transition-all hover:bg-white/5">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white/60 border border-white/10 uppercase tracking-tighter">
-                      Normal
-                    </span>
-                    <span className="text-[10px] text-white/40">5h ago</span>
+                {!loading && error ? (
+                  <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
+                    {error}
                   </div>
-                  <h3 className="text-sm font-bold text-white/90 mb-1">
-                    Classic Noir Night
-                  </h3>
-                  <p className="text-xs text-white/60 mb-3 truncate">
-                    Boutique Screen 4 • Velvet Seats
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-5 h-5 rounded-full bg-cover bg-center"
-                      style={{
-                        backgroundImage:
-                          "url('https://lh3.googleusercontent.com/aida-public/AB6AXuBzFbV-Mox4DG-qQdyfcs0qg2hJ-v0Xzad6Bkx7AE9mcsBAs3QB85wOFEKeNUnTDEfRKstY24HO0WQ4zwfuKuZBIDXiy9aewGxps6UPjMhxCqLLSCThxzeDlUye1FJdGqhj-GrEVBlylZITCehMI3FlAPAatHUT0s3G32c0Pc5ta62CaLDksNu4Tw408NHx_hMgIC0pTTX9hdNLzb9zwgDhsnKbt8iCXV7CKP3syYGFPjVZb-t93dY3ePnsrvZVIh9wtWUy-nbo5KAQ')",
-                      }}
-                    />
-                    <span className="text-[10px] text-white/40 font-medium">
-                      Vintage Collective
-                    </span>
-                  </div>
-                </div>
+                ) : null}
 
-                <div className="event-card border border-white/5 p-4 rounded-xl cursor-pointer transition-all hover:bg-white/5">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white/60 border border-white/10 uppercase tracking-tighter">
-                      Normal
-                    </span>
-                    <span className="text-[10px] text-white/40">8h ago</span>
+                {!loading && !error && filteredEvents.length === 0 ? (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/60">
+                    No pending event submissions found.
                   </div>
-                  <h3 className="text-sm font-bold text-white/90 mb-1">
-                    Anime Expo 2024
-                  </h3>
-                  <p className="text-xs text-white/60 mb-3 truncate">
-                    Main Hall • Convention Center
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-5 h-5 rounded-full bg-cover bg-center"
-                      style={{
-                        backgroundImage:
-                          "url('https://lh3.googleusercontent.com/aida-public/AB6AXuB5RhuuqcbywCqh29mgLDmqewSf22M2dvHFUOHyun2AymshCzmRAmNw0MWdnA-HfFC-K7b64CFJ5CKfwkxZSrH0_HOFh_AdbAz1pYGNMwJe-COmRM0SvxQ4xl70n4LHCdEr3muobEsPGyCQKTjRRbKWi5W_AQA3mz6IdFZT7TcUyQ4P6-jVI2naqFv0XsV3t1bOd9L-pV4jYUkLCd9mDA8jMm6jjDDyvMEP3gr9iNFndLERRAVvZKZNg0jSxCXL9K1QEJzk7j13kKIr')",
-                      }}
-                    />
-                    <span className="text-[10px] text-white/40 font-medium">
-                      Global Media Inc.
-                    </span>
-                  </div>
-                </div>
+                ) : null}
+
+                {!loading && !error
+                  ? filteredEvents.map((event) => {
+                      const isSelected =
+                        (selectedEvent?._id || selectedId) === event._id;
+                      return (
+                        <button
+                          key={event._id}
+                          onClick={() => setSelectedId(event._id)}
+                          type="button"
+                          className={`event-card w-full text-left border p-3 rounded-lg cursor-pointer transition-all hover:bg-white/5 ${
+                            isSelected
+                              ? "active border-white/10"
+                              : "border-white/5"
+                          }`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white/60 border border-white/10 uppercase tracking-tighter">
+                              Pending Review
+                            </span>
+                            <span className="text-[10px] text-white/40">
+                              {formatTimeAgo(event.createdAt)}
+                            </span>
+                          </div>
+                          <h3
+                            className={`text-xs font-bold mb-1 ${
+                              isSelected ? "text-accent" : "text-white/90"
+                            }`}>
+                            {event?.movieDetails?.title || "Untitled Event"}
+                          </h3>
+                          <p className="text-xs text-white/60 mb-3 truncate">
+                            {(event?.venueDetails?.venueTemplateName ||
+                              event?.cinema ||
+                              "Venue") +
+                              " • " +
+                              (event?.venueDetails?.venueType || "Event")}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-[9px] font-black text-white/45 overflow-hidden">
+                              {resolvePoster(event) ? (
+                                <div
+                                  className="h-full w-full bg-cover bg-center"
+                                  style={{
+                                    backgroundImage: `url('${resolvePoster(event)}')`,
+                                    backgroundPosition: "top center",
+                                  }}
+                                />
+                              ) : (
+                                <span className="material-symbols-outlined text-[11px]">
+                                  image
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-white/40 font-medium truncate">
+                              {event?.organizationName ||
+                                event?.submittedByName ||
+                                "Organizer"}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  : null}
               </div>
             </aside>
 
             <main className="flex-1 flex flex-col overflow-hidden">
-              <header className="bg-charcoal/50 border-b border-white/5 p-6 flex justify-between items-center">
+              <header className="bg-charcoal/50 border-b border-white/5 p-4 flex justify-between items-center">
                 <div className="flex items-center gap-4">
                   <span className="material-symbols-outlined text-white/40">
                     chevron_left
                   </span>
-                  <h2 className="text-xl font-bold tracking-tight">
-                    Review Submission: Interstellar 10th Anniversary
+                  <h2 className="text-lg font-bold tracking-tight">
+                    Review Submission:{" "}
+                    {selectedEvent?.movieDetails?.title || "-"}
                   </h2>
                 </div>
                 <div className="flex gap-3">
-                  <button className="flex items-center gap-2 border border-white/10 px-4 py-2 rounded-lg font-bold text-sm hover:bg-white/5 transition-all">
+                  <button className="flex items-center gap-1.5 border border-white/10 px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-white/5 transition-all">
                     <span className="material-symbols-outlined text-sm">
                       edit_note
                     </span>
                     Request Changes
                   </button>
-                  <button className="flex items-center gap-2 bg-primary text-white border border-primary/20 px-4 py-2 rounded-lg font-bold text-sm hover:bg-primary/80 transition-all">
+                  <button
+                    className="flex items-center gap-1.5 bg-primary text-white border border-primary/20 px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-primary/80 transition-all disabled:opacity-50"
+                    type="button"
+                    disabled={!selectedEvent || isUpdating}
+                    onClick={() => handleStatusUpdate("rejected")}>
                     <span className="material-symbols-outlined text-sm">
                       block
                     </span>
                     Reject Submission
                   </button>
-                  <button className="flex items-center gap-2 bg-accent text-charcoal px-6 py-2 rounded-lg font-black text-sm hover:bg-accent/90 transition-all">
+                  <button
+                    className="flex items-center gap-1.5 bg-accent text-charcoal px-4 py-1.5 rounded-lg font-black text-xs hover:bg-accent/90 transition-all disabled:opacity-50"
+                    type="button"
+                    disabled={!selectedEvent || isUpdating}
+                    onClick={() => handleStatusUpdate("published")}>
                     <span className="material-symbols-outlined text-sm">
                       publish
                     </span>
@@ -243,121 +605,127 @@ export default function EventValidationPage() {
               </header>
 
               <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <div className="p-8 max-w-6xl mx-auto space-y-10">
+                <div className="p-5 max-w-5xl mx-auto space-y-6">
+                  {actionError ? (
+                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                      {actionError}
+                    </div>
+                  ) : null}
                   <section>
-                    <div className="relative h-[400px] w-full rounded-2xl overflow-hidden mb-6 group">
-                      <img
-                        alt="Event Hero"
-                        className="w-full h-full object-cover"
-                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCwdIrF1MJfxDM_8N2yaq11VEakmZ-OS_QYpvbYkJRfSzkm-P5m-EKiAzZOzpMXgoxztbiXrajQo5dx1MLydSP-d1HWRF9bq2AUNZDJ_kIk5OgcMILKh2jmsIxZOXzd2ygvbQP35GjlmNlxTrNbtZ9veUgK6PLVsR6L7RgE1zAXIUKnXpwycKYrPk13HakdRJtsWfiihQWBtyHeX82OcGHF1QmSoVQwcG5U3ikMZuHVZbW1blQ3wKtu71LA5oH0a1Zj3EML1y90I2bF"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                      <div className="absolute bottom-8 left-8 right-8">
-                        <div className="flex items-end justify-between">
-                          <div>
-                            <h3 className="text-4xl font-black mb-2">
-                              Interstellar: 10th Anniversary IMAX
-                            </h3>
-                            <div className="flex gap-4 text-sm text-white/80">
-                              <span className="flex items-center gap-1">
-                                <span className="material-symbols-outlined text-sm">
-                                  calendar_today
-                                </span>{" "}
-                                Oct 24, 2024
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <span className="material-symbols-outlined text-sm">
-                                  schedule
-                                </span>{" "}
-                                19:00 - 22:45
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <span className="material-symbols-outlined text-sm">
-                                  location_on
-                                </span>{" "}
-                                Grand Cinema Hall, London
-                              </span>
-                            </div>
+                    <div className="mb-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-end justify-between gap-4">
+                        <div>
+                          <h3 className="text-2xl font-black mb-1.5">
+                            {selectedEvent?.movieDetails?.title ||
+                              "No Selected Event"}
+                          </h3>
+                          <div className="flex gap-3 text-xs text-white/80">
+                            <span className="flex items-center gap-1">
+                              <span className="material-symbols-outlined text-sm">
+                                calendar_today
+                              </span>{" "}
+                              {selectedEvent
+                                ? formatDateTime(selectedEvent.date)
+                                : "-"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="material-symbols-outlined text-sm">
+                                schedule
+                              </span>{" "}
+                              {selectedEvent?.startTime || "-"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="material-symbols-outlined text-sm">
+                                location_on
+                              </span>{" "}
+                              {selectedEvent?.venueDetails?.venueTemplateName ||
+                                selectedEvent?.cinema ||
+                                "-"}
+                            </span>
                           </div>
-                          <div className="bg-accent/20 backdrop-blur-md border border-accent/30 p-4 rounded-xl text-center min-w-[120px]">
-                            <p className="text-[10px] text-accent uppercase font-black tracking-widest">
-                              Base Price
-                            </p>
-                            <p className="text-2xl font-black text-accent">
-                              £24.99
-                            </p>
-                          </div>
+                        </div>
+                        <div className="bg-accent/20 backdrop-blur-md border border-accent/30 p-3 rounded-lg text-center min-w-[100px]">
+                          <p className="text-[10px] text-accent uppercase font-black tracking-widest">
+                            Base Price
+                          </p>
+                          <p className="text-xl font-black text-accent">
+                            {selectedPrices[0]?.value || "0.000 TND"}
+                          </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-8">
-                      <div className="col-span-2 space-y-8">
+                    <div className="relative h-[320px] w-full rounded-xl overflow-hidden mb-4 group">
+                      {selectedPoster ? (
+                        <img
+                          alt="Event Hero"
+                          className="w-full h-full object-cover object-top"
+                          src={selectedPoster}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-white/10 via-white/5 to-transparent text-white/30">
+                          <span className="material-symbols-outlined text-6xl">
+                            image
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-5">
+                      <div className="col-span-2 space-y-5">
                         <div>
-                          <h4 className="text-xs font-black uppercase text-accent tracking-widest mb-4">
+                          <h4 className="text-[11px] font-black uppercase text-accent tracking-widest mb-3">
                             Event Description
                           </h4>
-                          <div className="bg-white/5 rounded-2xl p-6 border border-white/10 leading-relaxed text-white/80 space-y-4">
+                          <div className="bg-white/5 rounded-xl p-4 border border-white/10 leading-relaxed text-sm text-white/80 space-y-3">
                             <p>
-                              Experience Christopher Nolan's masterpiece like
-                              never before. This exclusive 10th-anniversary
-                              screening will be presented in full 15/70mm IMAX
-                              film format. The event includes a 15-minute
-                              introductory piece on the film's scientific legacy
-                              and soundtrack production.
-                            </p>
-                            <p>
-                              All attendees will receive a limited edition
-                              10th-anniversary commemorative film cell and a
-                              high-quality poster of the event. Dress code:
-                              Smart Casual.
+                              {selectedEvent?.movieDetails?.synopsis ||
+                                "No synopsis provided for this submission."}
                             </p>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <h4 className="text-xs font-black uppercase text-accent tracking-widest mb-4">
+                            <h4 className="text-[11px] font-black uppercase text-accent tracking-widest mb-3">
                               Pricing Tiers
                             </h4>
-                            <div className="bg-white/5 rounded-2xl p-6 border border-white/10 space-y-4">
-                              <div className="flex justify-between items-center pb-3 border-b border-white/5">
-                                <span className="text-sm font-bold text-white/60">
-                                  Standard Admission
-                                </span>
-                                <span className="text-sm font-black">
-                                  £24.99
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center pb-3 border-b border-white/5">
-                                <span className="text-sm font-bold text-white/60">
-                                  Premium Royal Box
-                                </span>
-                                <span className="text-sm font-black text-accent">
-                                  £45.00
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-sm font-bold text-white/60">
-                                  Student / Senior
-                                </span>
-                                <span className="text-sm font-black">
-                                  £18.50
-                                </span>
-                              </div>
+                            <div className="bg-white/5 rounded-xl p-4 border border-white/10 space-y-3">
+                              {selectedPrices.map((row, index) => (
+                                <div
+                                  key={`${row.label}-${index}`}
+                                  className={`flex justify-between items-center ${
+                                    index < selectedPrices.length - 1
+                                      ? "pb-3 border-b border-white/5"
+                                      : ""
+                                  }`}>
+                                  <span className="text-sm font-bold text-white/60">
+                                    {row.label}
+                                  </span>
+                                  <span
+                                    className={`text-sm font-black ${
+                                      index === 0 ? "text-accent" : ""
+                                    }`}>
+                                    {row.value}
+                                  </span>
+                                </div>
+                              ))}
                             </div>
                           </div>
 
                           <div>
-                            <h4 className="text-xs font-black uppercase text-accent tracking-widest mb-4">
+                            <h4 className="text-[11px] font-black uppercase text-accent tracking-widest mb-3">
                               Venue Info
                             </h4>
-                            <div className="bg-white/5 rounded-2xl p-6 border border-white/10 space-y-3">
+                            <div className="bg-white/5 rounded-xl p-4 border border-white/10 space-y-2.5">
                               <p className="text-sm font-bold">
-                                Grand Cinema Hall
+                                {selectedEvent?.venueDetails
+                                  ?.venueTemplateName ||
+                                  selectedEvent?.cinema ||
+                                  "-"}
                               </p>
                               <p className="text-xs text-white/60">
-                                Leicester Square, London WC2H 7NA
+                                {selectedEvent?.venueDetails?.location || "-"}
                               </p>
                               <div className="pt-3">
                                 <span className="flex items-center gap-2 text-xs text-success bg-success/10 px-3 py-1 rounded-lg w-fit">
@@ -373,50 +741,45 @@ export default function EventValidationPage() {
                       </div>
 
                       <div className="col-span-1">
-                        <h4 className="text-xs font-black uppercase text-accent tracking-widest mb-4">
+                        <h4 className="text-[11px] font-black uppercase text-accent tracking-widest mb-3">
                           Seating Plan
                         </h4>
-                        <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
-                          <div className="bg-white/5 p-3 text-center border-b border-white/10 text-[10px] uppercase font-black tracking-widest text-white/40">
-                            Screen Area
-                          </div>
-                          <div className="p-6 aspect-square flex flex-col items-center justify-center gap-2">
-                            <div className="grid grid-cols-8 gap-1.5">
-                              {Array.from({ length: 8 }).map((_, i) => (
-                                <div
-                                  key={`vip-${i}`}
-                                  className="w-4 h-4 rounded-sm bg-accent/40"
-                                />
-                              ))}
-                              {Array.from({ length: 16 }).map((_, i) => (
-                                <div
-                                  key={`std-${i}`}
-                                  className="w-4 h-4 rounded-sm bg-white/10"
-                                />
-                              ))}
-                              {Array.from({ length: 8 }).map((_, i) => (
-                                <div
-                                  key={`box-${i}`}
-                                  className="w-4 h-4 rounded-sm bg-primary/40"
-                                />
-                              ))}
+                        <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-3">
+                          {loadingVenueTemplate &&
+                          seatRowsForPreview.length === 0 ? (
+                            <div className="rounded-lg border border-white/10 bg-background-dark px-3 py-2 text-[10px] text-white/55">
+                              Loading selected layout...
                             </div>
-                            <p className="text-[10px] text-white/40 mt-4 italic text-center">
-                              Standard Layout • 254 Total Capacity
-                            </p>
-                          </div>
-                          <div className="bg-white/5 p-4 flex justify-around border-t border-white/10">
+                          ) : (
+                            <div className="w-full">
+                              <MiniVenueMap
+                                rows={seatRowsForPreview}
+                                screenLabel={screenLabelForPreview}
+                              />
+                            </div>
+                          )}
+
+                          <p className="text-[10px] text-white/45 italic text-center">
+                            {selectedVenueTemplate?.name || "Selected Layout"} •{" "}
+                            {selectedEvent?.totalSeats || 0} Total Capacity
+                          </p>
+
+                          <div className="grid grid-cols-2 gap-2 text-[10px] text-white/75">
                             <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-accent/40" />
-                              <span className="text-[10px]">VIP</span>
+                              <div className="h-2.5 w-2.5 rounded-full bg-primary/80" />
+                              <span>Premium</span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-white/10" />
-                              <span className="text-[10px]">STD</span>
+                              <div className="h-2.5 w-2.5 rounded-full bg-accent" />
+                              <span>VIP</span>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-primary/40" />
-                              <span className="text-[10px]">BOX</span>
+                              <div className="h-2.5 w-2.5 rounded-full bg-pmr-green" />
+                              <span>Accessible</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-2.5 w-2.5 rounded-full bg-white/60" />
+                              <span>Standard</span>
                             </div>
                           </div>
                         </div>
@@ -433,17 +796,19 @@ export default function EventValidationPage() {
                   Organizer Profile
                 </h4>
                 <div className="flex items-center gap-4 mb-6">
-                  <div
-                    className="w-12 h-12 rounded-xl bg-cover bg-center border border-accent/20"
-                    style={{
-                      backgroundImage:
-                        "url('https://lh3.googleusercontent.com/aida-public/AB6AXuBtNM216UREDZ1r9Uiamx_r5zDa91f1tXWsp808sdBZMm2jl4Gc_jibiFOyIeB5R6H4ye349qZ6kYlCpDP0EmR7zpqMWlVbZpLgj3IeKmls9pk5liLqFnaeJNYlslC43QXXvs6NLFQgXcH3UVRXA5NJb2wd75tcH3iY51sQ74lvFttytzk0mATrShhsSS923oQZt26K5DcK3TMYt4zFlOJsFA9CS7HIlw6CSwYkeh85snBGW4t-qm8HQGOZWnROvKljEQBCcO605BEM')",
-                    }}
-                  />
+                  <div className="w-12 h-12 rounded-xl border border-accent/20 bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center text-white/35">
+                    <span className="material-symbols-outlined text-2xl">
+                      person
+                    </span>
+                  </div>
                   <div>
-                    <p className="font-bold text-sm">Warner Bros. Events</p>
+                    <p className="font-bold text-sm">
+                      {selectedEvent?.organizationName ||
+                        selectedEvent?.submittedByName ||
+                        "Organizer"}
+                    </p>
                     <p className="text-xs text-white/40 italic">
-                      Member since Jan 2021
+                      Submitted {formatTimeAgo(selectedEvent?.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -453,7 +818,7 @@ export default function EventValidationPage() {
                     <p className="text-[10px] font-bold text-white/40 uppercase">
                       Past Events
                     </p>
-                    <p className="text-lg font-black">142</p>
+                    <p className="text-lg font-black">{events.length}</p>
                   </div>
                   <div className="bg-white/5 p-3 rounded-lg border border-white/10">
                     <p className="text-[10px] font-bold text-white/40 uppercase">
