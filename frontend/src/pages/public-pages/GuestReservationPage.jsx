@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { eventById } from "../../data/events";
+import { getEventById } from "../../api/eventApi";
 
 const seatLayout = [
   "ooaaaaaaaaoo",
@@ -16,13 +16,63 @@ function parsePrice(value) {
 
 export default function GuestReservationPage() {
   const { eventId } = useParams();
-  const event = eventById[eventId];
+  const [event, setEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  if (!event) {
+  useEffect(() => {
+    const fetchEvent = async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const backendEvent = await getEventById(eventId);
+
+        // Transform backend event data to match expected format
+        const transformedEvent = {
+          id: backendEvent._id,
+          title:
+            backendEvent.movieDetails?.title ||
+            backendEvent.festivalDetails?.festivalName ||
+            "Untitled Event",
+          price:
+            backendEvent.pricingDetails?.singlePrice || backendEvent.price || 0,
+          image:
+            backendEvent.movieDetails?.posterUrl ||
+            backendEvent.festivalDetails?.posterUrl ||
+            "",
+        };
+
+        setEvent(transformedEvent);
+      } catch (err) {
+        setError(err.message || "Failed to load event");
+        setEvent(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (eventId) {
+      fetchEvent();
+    }
+  }, [eventId]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background-dark text-white">
+        <div className="text-center">
+          <p className="text-lg font-medium">Loading reservation details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !event) {
     return (
       <main className="mx-auto max-w-[1440px] px-6 py-20 md:px-20">
         <h2 className="mb-4 text-3xl font-black">Event not found</h2>
-        <p className="mb-8 text-white/60">This reservation link is invalid.</p>
+        <p className="mb-8 text-white/60">
+          {error || "This reservation link is invalid."}
+        </p>
         <Link
           className="rounded-xl bg-accent px-6 py-3 font-bold text-charcoal"
           to="/events">

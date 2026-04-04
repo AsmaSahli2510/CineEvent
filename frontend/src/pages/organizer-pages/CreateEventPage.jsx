@@ -1674,47 +1674,55 @@ export default function CreateEventPage() {
               </ul>
             </article>
 
-            <article className="rounded-2xl border border-white/10 bg-background-dark/70 p-5">
-              <p className="text-xs uppercase tracking-[0.15em] text-white/50">
-                Quick summary
+            <article className="rounded-lg border border-accent/30 bg-gradient-to-br from-accent/10 to-background-dark/50 p-2.5">
+              <p className="mb-1.5 text-[10px] uppercase tracking-[0.15em] text-accent/70 font-bold">
+                Event card
               </p>
-              <div className="mt-3 space-y-3 text-sm text-white/80">
-                <p>
-                  <span className="text-white/50">Event type:</span>{" "}
-                  {form.eventType === "movie" ? "Movie" : "Festival"}
-                </p>
-                <p>
-                  <span className="text-white/50">
-                    {form.eventType === "movie" ? "Movie" : "Festival"}:
-                  </span>{" "}
-                  {form.eventType === "movie"
-                    ? form.movieTitle || "-"
-                    : form.festivalName || "-"}
-                </p>
-                <p>
-                  <span className="text-white/50">Venue:</span>{" "}
-                  {selectedVenue?.name || "-"}
-                </p>
-                <p>
-                  <span className="text-white/50">Date:</span>{" "}
-                  {form.eventType === "movie"
-                    ? form.screeningDate && form.screeningTime
-                      ? `${form.screeningDate} ${form.screeningTime}`
-                      : "-"
-                    : form.festivalStartDate && form.festivalEndDate
-                      ? `${form.festivalStartDate} to ${form.festivalEndDate}`
-                      : "-"}
-                </p>
-                <p>
-                  <span className="text-white/50">Spectator pays:</span>{" "}
-                  {asTnd(spectatorTotal)}
-                </p>
-                <p>
-                  <span className="text-white/50">
-                    Submissions this session:
-                  </span>{" "}
-                  {submitCount}
-                </p>
+              <div className="flex flex-col gap-0.5 text-[10px] text-white/70">
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-xs text-accent">
+                    location_on
+                  </span>
+                  <span className="text-white/50 min-w-fit">Venue:</span>
+                  <span className="font-semibold truncate">
+                    {selectedVenue?.name || "-"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-xs text-accent">
+                    event
+                  </span>
+                  <span className="text-white/50 min-w-fit">Date:</span>
+                  <span className="font-semibold truncate">
+                    {form.eventType === "movie"
+                      ? form.screeningDate && form.screeningTime
+                        ? `${form.screeningDate}`
+                        : "-"
+                      : form.festivalStartDate && form.festivalEndDate
+                        ? `${form.festivalStartDate}`
+                        : "-"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-xs text-accent">
+                    schedule
+                  </span>
+                  <span className="text-white/50 min-w-fit">Time:</span>
+                  <span className="font-semibold truncate">
+                    {form.eventType === "movie"
+                      ? form.screeningTime || "-"
+                      : "N/A"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-xs text-primary">
+                    payments
+                  </span>
+                  <span className="text-white/50 min-w-fit">Price:</span>
+                  <span className="font-bold text-primary text-[11px]">
+                    {asTnd(spectatorTotal)}
+                  </span>
+                </div>
               </div>
             </article>
           </aside>

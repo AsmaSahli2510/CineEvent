@@ -104,3 +104,19 @@ export const updateEvent = async (eventId, payload) => {
 
   return data;
 };
+
+export const getEventById = async (eventId) => {
+  const response = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  const data = await parseJson(response);
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to fetch event");
+  }
+
+  return data;
+};
