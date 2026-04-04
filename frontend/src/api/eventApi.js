@@ -12,11 +12,20 @@ const parseJson = async (response) => {
   }
 };
 
-export const createOrganizerEvent = async (payload, posterFile) => {
+export const createOrganizerEvent = async (
+  payload,
+  posterFile,
+  galleryFiles = [],
+) => {
   const formData = new FormData();
   formData.append("payload", JSON.stringify(payload));
   if (posterFile) {
     formData.append("poster", posterFile);
+  }
+  if (Array.isArray(galleryFiles) && galleryFiles.length > 0) {
+    galleryFiles.forEach((file) => {
+      formData.append("gallery", file);
+    });
   }
 
   const response = await fetch(`${API_BASE_URL}/events`, {

@@ -303,7 +303,9 @@ export default function MyEventsListPage() {
                 return (
                   <>
                     <div className="flex items-start justify-between gap-3">
-                      <h3 className="text-lg font-black text-white">{selectedTitle}</h3>
+                      <h3 className="text-lg font-black text-white">
+                        {selectedTitle}
+                      </h3>
                       <button
                         type="button"
                         onClick={() => setSelectedEvent(null)}
@@ -351,7 +353,9 @@ export default function MyEventsListPage() {
                         </p>
                         <p>
                           <span className="text-white/50">Price:</span>{" "}
-                          {selectedIsFree ? "Free" : `${selectedPrice.toFixed(3)} TND`}
+                          {selectedIsFree
+                            ? "Free"
+                            : `${selectedPrice.toFixed(3)} TND`}
                         </p>
                       </div>
                     </div>

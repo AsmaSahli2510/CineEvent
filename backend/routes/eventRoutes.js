@@ -14,7 +14,15 @@ const { uploadEventPoster } = require("../middleware/uploadMiddleware");
 router.get("/", getEvents);
 router.get("/mine", protect, getMyEvents);
 router.get("/:id", getEventById);
-router.post("/", protect, uploadEventPoster.single("poster"), createEvent);
+router.post(
+  "/",
+  protect,
+  uploadEventPoster.fields([
+    { name: "poster", maxCount: 1 },
+    { name: "gallery", maxCount: 8 },
+  ]),
+  createEvent,
+);
 router.put("/:id", protect, adminOnly, updateEvent);
 router.delete("/:id", protect, adminOnly, deleteEvent);
 

@@ -10,31 +10,37 @@ import MiniVenueMap from "../../components/organizer/MiniVenueMap";
 const STEPS = [
   {
     id: 1,
-    title: "Movie Information",
-    subtitle: "Core details and poster",
+    title: "Event Type",
+    subtitle: "Choose between movie or festival",
   },
   {
     id: 2,
+    title: "Event Information",
+    subtitle: "Core details and poster",
+  },
+  {
+    id: 3,
     title: "Venue and Date",
     subtitle: "Venue selection and screening",
   },
   {
-    id: 3,
+    id: 4,
     title: "Pricing",
     subtitle: "Ticketing, charity, and fees",
   },
   {
-    id: 4,
+    id: 5,
     title: "Media (Optional)",
     subtitle: "Gallery images and teaser",
   },
 ];
 
 const STEPPER_ITEMS = [
-  { id: 1, label: "Movie", icon: "movie" },
-  { id: 2, label: "Venue", icon: "location_on" },
-  { id: 3, label: "Price", icon: "payments" },
-  { id: 4, label: "Media", icon: "photo_library" },
+  { id: 1, label: "Type", icon: "category" },
+  { id: 2, label: "Info", icon: "movie" },
+  { id: 3, label: "Venue", icon: "location_on" },
+  { id: 4, label: "Price", icon: "payments" },
+  { id: 5, label: "Media", icon: "photo_library" },
 ];
 
 const CREATE_EVENT_DRAFT_STORAGE_KEY = "organizer_create_event_draft_v1";
@@ -100,6 +106,8 @@ function venueImageClass(ambience) {
 }
 
 const INITIAL_FORM_STATE = {
+  eventType: "movie",
+  // Movie fields
   movieTitle: "",
   genre: "",
   durationMinutes: "",
@@ -107,6 +115,15 @@ const INITIAL_FORM_STATE = {
   director: "",
   posterFile: null,
   posterPreviewUrl: "",
+  // Festival fields
+  festivalName: "",
+  festivalCategory: "",
+  festivalDescription: "",
+  festivalStartDate: "",
+  festivalEndDate: "",
+  festivalPosterFile: null,
+  festivalPosterPreviewUrl: "",
+  // Common fields
   venueType: "",
   venueTemplateId: "",
   screeningDate: "",
@@ -420,29 +437,60 @@ export default function CreateEventPage() {
   };
 
   const validateStep1 = () => {
-    if (!form.movieTitle.trim()) {
-      return "Movie title is required.";
+    if (!form.eventType) {
+      return "Event type is required.";
     }
-    if (!form.genre.trim()) {
-      return "Genre is required.";
-    }
-    if (!form.durationMinutes || Number(form.durationMinutes) <= 0) {
-      return "Movie duration is required.";
-    }
-    if (!form.synopsis.trim()) {
-      return "Synopsis is required.";
-    }
-    if (!form.director.trim()) {
-      return "Director is required.";
-    }
-    if (!form.posterFile) {
-      return "Movie poster (JPG/PNG) is required.";
+    return "";
+  };
+
+  const validateStep2 = () => {
+    if (form.eventType === "movie") {
+      if (!form.movieTitle.trim()) {
+        return "Movie title is required.";
+      }
+      if (!form.genre.trim()) {
+        return "Genre is required.";
+      }
+      if (!form.durationMinutes || Number(form.durationMinutes) <= 0) {
+        return "Movie duration is required.";
+      }
+      if (!form.synopsis.trim()) {
+        return "Synopsis is required.";
+      }
+      if (!form.director.trim()) {
+        return "Director is required.";
+      }
+      if (!form.posterFile) {
+        return "Movie poster (JPG/PNG) is required.";
+      }
+    } else if (form.eventType === "festival") {
+      if (!form.festivalName.trim()) {
+        return "Festival name is required.";
+      }
+      if (!form.festivalCategory.trim()) {
+        return "Festival category is required.";
+      }
+      if (!form.festivalDescription.trim()) {
+        return "Festival description is required.";
+      }
+      if (!form.festivalStartDate) {
+        return "Festival start date is required.";
+      }
+      if (!form.festivalEndDate) {
+        return "Festival end date is required.";
+      }
+      if (form.festivalStartDate > form.festivalEndDate) {
+        return "Festival end date must be after start date.";
+      }
+      if (!form.festivalPosterFile) {
+        return "Festival poster (JPG/PNG) is required.";
+      }
     }
 
     return "";
   };
 
-  const validateStep2 = () => {
+  const validateStep3 = () => {
     if (!venues.length) {
       return "No published admin venues are available right now.";
     }
@@ -480,7 +528,7 @@ export default function CreateEventPage() {
     return "";
   };
 
-  const validateStep3 = () => {
+  const validateStep4 = () => {
     if (!form.isFreeEvent) {
       if (form.pricingMode === "unique") {
         const singlePriceError = validatePriceField("unique", form.singlePrice);
@@ -531,7 +579,10 @@ export default function CreateEventPage() {
     if (step === 2) {
       return validateStep2();
     }
-    return validateStep3();
+    if (step === 3) {
+      return validateStep3();
+    }
+    return validateStep4();
   };
 
   const handleNextStep = () => {
@@ -541,7 +592,7 @@ export default function CreateEventPage() {
       return;
     }
     setError("");
-    setStep((previous) => Math.min(previous + 1, 4));
+    setStep((previous) => Math.min(previous + 1, 5));
   };
 
   const handlePreviousStep = () => {
@@ -555,7 +606,12 @@ export default function CreateEventPage() {
   };
 
   const handleSubmitForValidation = async () => {
-    const validators = [validateStep1, validateStep2, validateStep3];
+    const validators = [
+      validateStep1,
+      validateStep2,
+      validateStep3,
+      validateStep4,
+    ];
     for (const validator of validators) {
       const possibleError = validator();
       if (possibleError) {
@@ -596,22 +652,35 @@ export default function CreateEventPage() {
           currentUser?.organizerProfile?.organizationName || "Organization",
       },
       status: "pending_validation",
-      movie: {
-        title: form.movieTitle.trim(),
-        genre: form.genre.trim(),
-        durationMinutes: Number(form.durationMinutes),
-        synopsis: form.synopsis.trim(),
-        director: form.director.trim(),
-        posterFileName: form.posterFile?.name || "",
-      },
-      projection: {
-        date: form.screeningDate,
-        time: form.screeningTime,
-        dateTimeIso: toIsoDateTime(
-          form.screeningDate,
-          form.screeningTime,
-        )?.toISOString(),
-      },
+      eventType: form.eventType,
+      ...(form.eventType === "movie" && {
+        movie: {
+          title: form.movieTitle.trim(),
+          genre: form.genre.trim(),
+          durationMinutes: Number(form.durationMinutes),
+          synopsis: form.synopsis.trim(),
+          director: form.director.trim(),
+          posterFileName: form.posterFile?.name || "",
+        },
+        projection: {
+          date: form.screeningDate,
+          time: form.screeningTime,
+          dateTimeIso: toIsoDateTime(
+            form.screeningDate,
+            form.screeningTime,
+          )?.toISOString(),
+        },
+      }),
+      ...(form.eventType === "festival" && {
+        festival: {
+          name: form.festivalName.trim(),
+          category: form.festivalCategory.trim(),
+          description: form.festivalDescription.trim(),
+          startDate: form.festivalStartDate,
+          endDate: form.festivalEndDate,
+          posterFileName: form.festivalPosterFile?.name || "",
+        },
+      }),
       venue: {
         venueType: selectedVenue?.type || "",
         venueTemplateId: form.venueTemplateId,
@@ -665,7 +734,9 @@ export default function CreateEventPage() {
     };
 
     try {
-      await createOrganizerEvent(payload, form.posterFile);
+      const posterFile =
+        form.eventType === "movie" ? form.posterFile : form.festivalPosterFile;
+      await createOrganizerEvent(payload, posterFile, form.galleryFiles);
     } catch (submitError) {
       setError(submitError.message || "Failed to submit event to backend.");
       return;
@@ -684,11 +755,17 @@ export default function CreateEventPage() {
       id: `event-${Date.now()}`,
       createdAt: nowIso,
       status: payload.status,
+      eventType: payload.eventType,
       organizerId: normalizedOrganizerId,
       organizerName: payload.submittedBy.organizerName,
       organizationName: payload.submittedBy.organizationName,
-      movie: payload.movie,
-      projection: payload.projection,
+      ...(form.eventType === "movie" && {
+        movie: payload.movie,
+        projection: payload.projection,
+      }),
+      ...(form.eventType === "festival" && {
+        festival: payload.festival,
+      }),
       venue: payload.venue,
       pricing: payload.pricing,
       charity: payload.charity,
@@ -718,123 +795,348 @@ export default function CreateEventPage() {
   const renderStepContent = () => {
     if (step === 1) {
       return (
-        <div className="grid gap-6 md:grid-cols-2">
-          <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-semibold text-white/80">
-              Movie title *
-            </span>
-            <input
-              name="movieTitle"
-              value={form.movieTitle}
-              onChange={handleTextInput}
-              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-              placeholder="Ex: Interstellar"
-              type="text"
-            />
-          </label>
+        <div className="space-y-6">
+          <p className="text-sm text-white/70">
+            Choose the type of event you want to create. This will determine
+            which fields are available in the following steps.
+          </p>
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-white/80">Genre *</span>
-            <input
-              name="genre"
-              value={form.genre}
-              onChange={handleTextInput}
-              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-              placeholder="Science fiction"
-              type="text"
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-white/80">
-              Duration (min) *
-            </span>
-            <input
-              name="durationMinutes"
-              value={form.durationMinutes}
-              onChange={handleTextInput}
-              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-              placeholder="120"
-              min="1"
-              type="number"
-            />
-          </label>
-
-          <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-semibold text-white/80">
-              Synopsis *
-            </span>
-            <textarea
-              name="synopsis"
-              value={form.synopsis}
-              onChange={handleTextInput}
-              className="min-h-28 w-full rounded-xl border border-white/10 bg-background-dark px-4 py-3 text-sm text-white outline-none transition focus:border-accent"
-              placeholder="Short story summary"
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-white/80">
-              Director *
-            </span>
-            <input
-              name="director"
-              value={form.director}
-              onChange={handleTextInput}
-              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-              placeholder="Christopher Nolan"
-              type="text"
-            />
-          </label>
-
-          <div className="md:col-span-2 rounded-2xl border border-white/10 bg-background-dark/70 p-4">
-            <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
-              <label className="space-y-2">
-                <span className="text-sm font-semibold text-white/80">
-                  Movie poster (JPG/PNG, max 5MB) *
+          <div className="grid gap-4 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setField("eventType", "movie")}
+              className={`rounded-2xl border-2 p-6 transition-all ${
+                form.eventType === "movie"
+                  ? "border-accent bg-accent/20"
+                  : "border-white/10 bg-background-dark hover:border-accent/50"
+              }`}>
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-3xl">
+                  {form.eventType === "movie" ? "check_circle" : "movie"}
                 </span>
-                <input
-                  accept="image/jpeg,image/png"
-                  onChange={handlePosterUpload}
-                  className="block w-full rounded-xl border border-dashed border-white/20 bg-background-dark p-3 text-sm text-white/80 file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-xs file:font-black file:text-charcoal"
-                  type="file"
-                />
-                <p className="text-xs text-white/40">
-                  Best result: portrait poster ratio close to 2:3.
-                </p>
-                <p className="text-xs text-white/40">
-                  The uploaded image cannot be auto-restored after browser
-                  restart.
-                </p>
-              </label>
-
-              <div>
-                <p className="mb-2 text-xs uppercase tracking-wider text-white/50">
-                  Poster preview
-                </p>
-                <div className="mx-auto w-full max-w-[210px]">
-                  <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-white/15 bg-charcoal shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
-                    {form.posterPreviewUrl ? (
-                      <img
-                        src={form.posterPreviewUrl}
-                        alt="Poster preview"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/25 via-background-dark to-accent/20 px-4 text-center text-xs font-bold uppercase tracking-wider text-white/70">
-                        No poster yet
-                      </div>
-                    )}
-                  </div>
+                <div className="text-left">
+                  <h3 className="font-black text-white">Movie Event</h3>
+                  <p className="text-sm text-white/60">
+                    Single movie screening
+                  </p>
                 </div>
               </div>
-            </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setField("eventType", "festival")}
+              className={`rounded-2xl border-2 p-6 transition-all ${
+                form.eventType === "festival"
+                  ? "border-accent bg-accent/20"
+                  : "border-white/10 bg-background-dark hover:border-accent/50"
+              }`}>
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-3xl">
+                  {form.eventType === "festival"
+                    ? "check_circle"
+                    : "celebration"}
+                </span>
+                <div className="text-left">
+                  <h3 className="font-black text-white">Festival Event</h3>
+                  <p className="text-sm text-white/60">Multi-day festival</p>
+                </div>
+              </div>
+            </button>
           </div>
         </div>
       );
     }
 
     if (step === 2) {
+      if (form.eventType === "movie") {
+        return (
+          <div className="grid gap-6 md:grid-cols-2">
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm font-semibold text-white/80">
+                Movie title *
+              </span>
+              <input
+                name="movieTitle"
+                value={form.movieTitle}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                placeholder="Ex: Interstellar"
+                type="text"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-white/80">
+                Genre *
+              </span>
+              <input
+                name="genre"
+                value={form.genre}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                placeholder="Science fiction"
+                type="text"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-white/80">
+                Duration (min) *
+              </span>
+              <input
+                name="durationMinutes"
+                value={form.durationMinutes}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                placeholder="120"
+                min="1"
+                type="number"
+              />
+            </label>
+
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm font-semibold text-white/80">
+                Synopsis *
+              </span>
+              <textarea
+                name="synopsis"
+                value={form.synopsis}
+                onChange={handleTextInput}
+                className="min-h-28 w-full rounded-xl border border-white/10 bg-background-dark px-4 py-3 text-sm text-white outline-none transition focus:border-accent"
+                placeholder="Short story summary"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-white/80">
+                Director *
+              </span>
+              <input
+                name="director"
+                value={form.director}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                placeholder="Christopher Nolan"
+                type="text"
+              />
+            </label>
+
+            <div className="md:col-span-2 rounded-2xl border border-white/10 bg-background-dark/70 p-4">
+              <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
+                <label className="space-y-2">
+                  <span className="text-sm font-semibold text-white/80">
+                    Movie poster (JPG/PNG, max 5MB) *
+                  </span>
+                  <input
+                    accept="image/jpeg,image/png"
+                    onChange={handlePosterUpload}
+                    className="block w-full rounded-xl border border-dashed border-white/20 bg-background-dark p-3 text-sm text-white/80 file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-xs file:font-black file:text-charcoal"
+                    type="file"
+                  />
+                  <p className="text-xs text-white/40">
+                    Best result: portrait poster ratio close to 2:3.
+                  </p>
+                  <p className="text-xs text-white/40">
+                    The uploaded image cannot be auto-restored after browser
+                    restart.
+                  </p>
+                </label>
+
+                <div>
+                  <p className="mb-2 text-xs uppercase tracking-wider text-white/50">
+                    Poster preview
+                  </p>
+                  <div className="mx-auto w-full max-w-[210px]">
+                    <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-white/15 bg-charcoal shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
+                      {form.posterPreviewUrl ? (
+                        <img
+                          src={form.posterPreviewUrl}
+                          alt="Poster preview"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/25 via-background-dark to-accent/20 px-4 text-center text-xs font-bold uppercase tracking-wider text-white/70">
+                          No poster yet
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      } else {
+        // Festival event fields
+        return (
+          <div className="grid gap-6 md:grid-cols-2">
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm font-semibold text-white/80">
+                Festival name *
+              </span>
+              <input
+                name="festivalName"
+                value={form.festivalName}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                placeholder="Ex: International Film Festival"
+                type="text"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-white/80">
+                Category *
+              </span>
+              <input
+                name="festivalCategory"
+                value={form.festivalCategory}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                placeholder="Ex: Film, Music, Art"
+                type="text"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-white/80">
+                Duration (days) - calculated from dates
+              </span>
+              <div className="h-12 w-full rounded-xl border border-white/10 bg-background-dark/50 px-4 flex items-center text-sm text-white/60">
+                {form.festivalStartDate && form.festivalEndDate
+                  ? `${Math.ceil(
+                      (new Date(form.festivalEndDate) -
+                        new Date(form.festivalStartDate)) /
+                        (1000 * 60 * 60 * 24),
+                    )} days`
+                  : "-"}
+              </div>
+            </label>
+
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-sm font-semibold text-white/80">
+                Description *
+              </span>
+              <textarea
+                name="festivalDescription"
+                value={form.festivalDescription}
+                onChange={handleTextInput}
+                className="min-h-28 w-full rounded-xl border border-white/10 bg-background-dark px-4 py-3 text-sm text-white outline-none transition focus:border-accent"
+                placeholder="Describe your festival"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-white/80">
+                Start date *
+              </span>
+              <input
+                name="festivalStartDate"
+                value={form.festivalStartDate}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                type="date"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-semibold text-white/80">
+                End date *
+              </span>
+              <input
+                name="festivalEndDate"
+                value={form.festivalEndDate}
+                onChange={handleTextInput}
+                className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                type="date"
+              />
+            </label>
+
+            <div className="md:col-span-2 rounded-2xl border border-white/10 bg-background-dark/70 p-4">
+              <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
+                <label className="space-y-2">
+                  <span className="text-sm font-semibold text-white/80">
+                    Festival poster (JPG/PNG, max 5MB) *
+                  </span>
+                  <input
+                    accept="image/jpeg,image/png"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      setError("");
+
+                      if (!file) {
+                        setForm((previous) => ({
+                          ...previous,
+                          festivalPosterFile: null,
+                          festivalPosterPreviewUrl: "",
+                        }));
+                        return;
+                      }
+
+                      if (!ALLOWED_POSTER_TYPES.includes(file.type)) {
+                        setError("Invalid poster: only JPG or PNG is allowed.");
+                        event.target.value = "";
+                        return;
+                      }
+
+                      if (file.size > MAX_POSTER_SIZE_BYTES) {
+                        setError("Invalid poster: maximum size is 5MB.");
+                        event.target.value = "";
+                        return;
+                      }
+
+                      const nextPreviewUrl = URL.createObjectURL(file);
+                      setForm((previous) => {
+                        if (previous.festivalPosterPreviewUrl) {
+                          URL.revokeObjectURL(
+                            previous.festivalPosterPreviewUrl,
+                          );
+                        }
+
+                        return {
+                          ...previous,
+                          festivalPosterFile: file,
+                          festivalPosterPreviewUrl: nextPreviewUrl,
+                        };
+                      });
+                    }}
+                    className="block w-full rounded-xl border border-dashed border-white/20 bg-background-dark p-3 text-sm text-white/80 file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-xs file:font-black file:text-charcoal"
+                    type="file"
+                  />
+                  <p className="text-xs text-white/40">
+                    Best result: portrait poster ratio close to 2:3.
+                  </p>
+                </label>
+
+                <div>
+                  <p className="mb-2 text-xs uppercase tracking-wider text-white/50">
+                    Poster preview
+                  </p>
+                  <div className="mx-auto w-full max-w-[210px]">
+                    <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-white/15 bg-charcoal shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
+                      {form.festivalPosterPreviewUrl ? (
+                        <img
+                          src={form.festivalPosterPreviewUrl}
+                          alt="Poster preview"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/25 via-background-dark to-accent/20 px-4 text-center text-xs font-bold uppercase tracking-wider text-white/70">
+                          No poster yet
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+    }
+
+    if (step === 3) {
       return (
         <div className="space-y-6">
           <div>
@@ -982,7 +1284,7 @@ export default function CreateEventPage() {
       );
     }
 
-    if (step === 3) {
+    if (step === 4) {
       return (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
@@ -1178,62 +1480,66 @@ export default function CreateEventPage() {
       );
     }
 
-    return (
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-white/10 bg-background-dark/70 p-4">
-          <p className="text-sm font-semibold text-white">Gallery images</p>
-          <p className="mt-1 text-xs text-white/50">
-            Optional. Add up to {MAX_GALLERY_IMAGES} images (JPG/PNG/WEBP, max
-            5MB each).
-          </p>
-          <input
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            onChange={handleGalleryUpload}
-            className="mt-3 block w-full rounded-xl border border-dashed border-white/20 bg-background-dark p-3 text-sm text-white/80 file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-xs file:font-black file:text-charcoal"
-            type="file"
-          />
-          <p className="mt-2 text-xs text-white/40">
-            Gallery images cannot be auto-restored after browser restart.
-          </p>
-        </div>
-
-        {form.galleryPreviewUrls.length > 0 && (
-          <div>
-            <p className="mb-2 text-xs uppercase tracking-wider text-white/50">
-              Gallery preview
+    if (step === 5) {
+      return (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-white/10 bg-background-dark/70 p-4">
+            <p className="text-sm font-semibold text-white">Gallery images</p>
+            <p className="mt-1 text-xs text-white/50">
+              Optional. Add up to {MAX_GALLERY_IMAGES} images (JPG/PNG/WEBP, max
+              5MB each).
             </p>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {form.galleryPreviewUrls.map((previewUrl, index) => (
-                <img
-                  key={`${previewUrl}-${index}`}
-                  src={previewUrl}
-                  alt={`Gallery preview ${index + 1}`}
-                  className="h-32 w-full rounded-xl border border-white/10 object-cover"
-                />
-              ))}
-            </div>
+            <input
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              onChange={handleGalleryUpload}
+              className="mt-3 block w-full rounded-xl border border-dashed border-white/20 bg-background-dark p-3 text-sm text-white/80 file:mr-4 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-xs file:font-black file:text-charcoal"
+              type="file"
+            />
+            <p className="mt-2 text-xs text-white/40">
+              Gallery images cannot be auto-restored after browser restart.
+            </p>
           </div>
-        )}
 
-        <label className="space-y-2">
-          <span className="text-sm font-semibold text-white/80">
-            Teaser URL
-          </span>
-          <input
-            name="teaserUrl"
-            value={form.teaserUrl}
-            onChange={handleTextInput}
-            className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-            placeholder="https://www.youtube.com/watch?v=..."
-            type="url"
-          />
-          <p className="text-xs text-white/50">
-            Optional link to YouTube, Vimeo, or another teaser host.
-          </p>
-        </label>
-      </div>
-    );
+          {form.galleryPreviewUrls.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs uppercase tracking-wider text-white/50">
+                Gallery preview
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {form.galleryPreviewUrls.map((previewUrl, index) => (
+                  <img
+                    key={`${previewUrl}-${index}`}
+                    src={previewUrl}
+                    alt={`Gallery preview ${index + 1}`}
+                    className="h-32 w-full rounded-xl border border-white/10 object-cover"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <label className="space-y-2">
+            <span className="text-sm font-semibold text-white/80">
+              Teaser URL
+            </span>
+            <input
+              name="teaserUrl"
+              value={form.teaserUrl}
+              onChange={handleTextInput}
+              className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+              placeholder="https://www.youtube.com/watch?v=..."
+              type="url"
+            />
+            <p className="text-xs text-white/50">
+              Optional link to YouTube, Vimeo, or another teaser host.
+            </p>
+          </label>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   const stepInfo = STEPS.find((item) => item.id === step);
@@ -1308,7 +1614,7 @@ export default function CreateEventPage() {
               </button>
 
               <div className="flex flex-wrap items-center gap-3">
-                {step < 4 ? (
+                {step < 5 ? (
                   <button
                     type="button"
                     onClick={handleNextStep}
@@ -1374,18 +1680,30 @@ export default function CreateEventPage() {
               </p>
               <div className="mt-3 space-y-3 text-sm text-white/80">
                 <p>
-                  <span className="text-white/50">Movie:</span>{" "}
-                  {form.movieTitle || "-"}
+                  <span className="text-white/50">Event type:</span>{" "}
+                  {form.eventType === "movie" ? "Movie" : "Festival"}
+                </p>
+                <p>
+                  <span className="text-white/50">
+                    {form.eventType === "movie" ? "Movie" : "Festival"}:
+                  </span>{" "}
+                  {form.eventType === "movie"
+                    ? form.movieTitle || "-"
+                    : form.festivalName || "-"}
                 </p>
                 <p>
                   <span className="text-white/50">Venue:</span>{" "}
                   {selectedVenue?.name || "-"}
                 </p>
                 <p>
-                  <span className="text-white/50">Screening:</span>{" "}
-                  {form.screeningDate && form.screeningTime
-                    ? `${form.screeningDate} ${form.screeningTime}`
-                    : "-"}
+                  <span className="text-white/50">Date:</span>{" "}
+                  {form.eventType === "movie"
+                    ? form.screeningDate && form.screeningTime
+                      ? `${form.screeningDate} ${form.screeningTime}`
+                      : "-"
+                    : form.festivalStartDate && form.festivalEndDate
+                      ? `${form.festivalStartDate} to ${form.festivalEndDate}`
+                      : "-"}
                 </p>
                 <p>
                   <span className="text-white/50">Spectator pays:</span>{" "}

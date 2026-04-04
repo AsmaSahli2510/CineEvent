@@ -42,6 +42,36 @@ function formatTimeAgo(dateValue) {
   return `${diffDays}d ago`;
 }
 
+function getYouTubeEmbedUrl(url) {
+  if (!url) return null;
+
+  // Handle youtube.com/watch?v=XXX
+  const watchMatch = url.match(/youtube\.com\/watch\?v=([^&]+)/);
+  if (watchMatch) return `https://www.youtube.com/embed/${watchMatch[1]}`;
+
+  // Handle youtu.be/XXX
+  const shortMatch = url.match(/youtu\.be\/([^?&]+)/);
+  if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
+
+  // Handle youtube.com/embed/XXX
+  if (url.includes("youtube.com/embed/")) return url;
+
+  return null;
+}
+
+function getVimeoEmbedUrl(url) {
+  if (!url) return null;
+
+  // Handle vimeo.com/XXX
+  const match = url.match(/vimeo\.com\/(\d+)/);
+  if (match) return `https://player.vimeo.com/video/${match[1]}`;
+
+  // Handle player.vimeo.com/video/XXX
+  if (url.includes("vimeo.com/video/")) return url;
+
+  return null;
+}
+
 function resolvePoster(event) {
   const rawPoster =
     event?.movieDetails?.posterUrl ||
@@ -782,6 +812,133 @@ export default function EventValidationPage() {
                               <span>Standard</span>
                             </div>
                           </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-5">
+                      <div>
+                        <h4 className="text-[11px] font-black uppercase text-accent tracking-widest mb-3">
+                          Gallery Media
+                        </h4>
+                        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                          {selectedEvent?.media?.galleryImageUrls &&
+                          selectedEvent.media.galleryImageUrls.length > 0 ? (
+                            <div className="grid grid-cols-4 gap-3">
+                              {selectedEvent.media.galleryImageUrls.map(
+                                (imageUrl, index) => (
+                                  <div
+                                    key={index}
+                                    className="relative group rounded-lg overflow-hidden aspect-square border border-white/10 bg-black/30">
+                                    <img
+                                      alt={`Gallery ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                      src={imageUrl}
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <span className="material-symbols-outlined text-white text-2xl">
+                                        image
+                                      </span>
+                                    </div>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center py-8 text-white/40">
+                              <span className="material-symbols-outlined mr-2">
+                                image
+                              </span>
+                              <span className="text-sm">
+                                No gallery images uploaded
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="text-[11px] font-black uppercase text-accent tracking-widest mb-3">
+                          Teaser / Trailer
+                        </h4>
+                        <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                          {selectedEvent?.media?.teaserUrl ? (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2 p-2 bg-black/30 rounded-lg border border-white/10">
+                                <span className="material-symbols-outlined text-accent text-lg">
+                                  link
+                                </span>
+                                <a
+                                  href={selectedEvent.media.teaserUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-accent hover:underline truncate flex-1">
+                                  {selectedEvent.media.teaserUrl}
+                                </a>
+                              </div>
+                              {(() => {
+                                const youtubeEmbedUrl = getYouTubeEmbedUrl(
+                                  selectedEvent.media.teaserUrl,
+                                );
+                                const vimeoEmbedUrl = getVimeoEmbedUrl(
+                                  selectedEvent.media.teaserUrl,
+                                );
+
+                                if (youtubeEmbedUrl) {
+                                  return (
+                                    <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black border border-white/10">
+                                      <iframe
+                                        title="Teaser"
+                                        className="w-full h-full"
+                                        src={youtubeEmbedUrl}
+                                        frameBorder="0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                if (vimeoEmbedUrl) {
+                                  return (
+                                    <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black border border-white/10">
+                                      <iframe
+                                        title="Teaser"
+                                        className="w-full h-full"
+                                        src={vimeoEmbedUrl}
+                                        frameBorder="0"
+                                        allow="autoplay; fullscreen; picture-in-picture"
+                                        allowFullScreen
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div className="flex items-center justify-center h-40 text-white/40">
+                                    <div className="text-center space-y-2">
+                                      <span className="material-symbols-outlined text-4xl block">
+                                        play_circle
+                                      </span>
+                                      <span className="text-sm">
+                                        Click link to view teaser (supported
+                                        platforms: YouTube, Vimeo)
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center py-8 text-white/40">
+                              <span className="material-symbols-outlined mr-2">
+                                play_circle
+                              </span>
+                              <span className="text-sm">
+                                No teaser URL provided
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

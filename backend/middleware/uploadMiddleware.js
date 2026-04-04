@@ -81,7 +81,7 @@ const uploadEventPoster = multer({
   storage: eventPosterStorage,
   fileFilter: eventPosterFilter,
   limits: {
-    files: 1,
+    files: 9,
     fileSize: 5 * 1024 * 1024,
   },
 });

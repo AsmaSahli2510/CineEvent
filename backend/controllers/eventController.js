@@ -6,7 +6,12 @@ const parsePositiveNumber = (value) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
-const buildOrganizerEventDocument = (payload, user, uploadedPosterUrl) => {
+const buildOrganizerEventDocument = (
+  payload,
+  user,
+  uploadedPosterUrl,
+  uploadedGalleryUrls = [],
+) => {
   const projection = payload?.projection || {};
   const venue = payload?.venue || {};
   const roomConfiguration = payload?.roomConfiguration || {};
@@ -124,6 +129,10 @@ const buildOrganizerEventDocument = (payload, user, uploadedPosterUrl) => {
       )
         ? payload.media.galleryImageFileNames
         : [],
+      galleryImageUrls:
+        Array.isArray(uploadedGalleryUrls) && uploadedGalleryUrls.length > 0
+          ? uploadedGalleryUrls
+          : [],
     },
   };
 };
@@ -221,16 +230,28 @@ const createEvent = async (req, res) => {
       }
     }
 
-    const uploadedPosterUrl = req.file
-      ? `${req.protocol}://${req.get("host")}/uploads/event-posters/${req.file.filename}`
+    const posterFile = req.files?.poster?.[0];
+    const uploadedPosterUrl = posterFile
+      ? `${req.protocol}://${req.get("host")}/uploads/event-posters/${posterFile.filename}`
       : "";
+
+    const galleryFiles = req.files?.gallery || [];
+    const uploadedGalleryUrls = galleryFiles.map(
+      (file) =>
+        `${req.protocol}://${req.get("host")}/uploads/event-posters/${file.filename}`,
+    );
 
     const isOrganizerSubmissionPayload = Boolean(
       parsedBody?.movie && parsedBody?.projection && parsedBody?.venue,
     );
     const payload =
       req.user.role === "organizer" && isOrganizerSubmissionPayload
-        ? buildOrganizerEventDocument(parsedBody, req.user, uploadedPosterUrl)
+        ? buildOrganizerEventDocument(
+            parsedBody,
+            req.user,
+            uploadedPosterUrl,
+            uploadedGalleryUrls,
+          )
         : parsedBody;
 
     if (req.user.role === "organizer" && !isOrganizerSubmissionPayload) {

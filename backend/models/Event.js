@@ -17,6 +17,13 @@ const eventSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    eventType: {
+      type: String,
+      enum: ["movie", "festival"],
+      required: [true, "Event type is required"],
+      default: "movie",
+    },
+    // Movie-specific fields
     movie: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Movie",
@@ -27,6 +34,25 @@ const eventSchema = new mongoose.Schema(
       durationMinutes: { type: Number, default: 0 },
       synopsis: { type: String, default: "" },
       director: { type: String, trim: true, default: "" },
+      posterFileName: { type: String, trim: true, default: "" },
+      posterUrl: { type: String, default: "" },
+      posterDataUrl: { type: String, default: "" },
+    },
+    // Festival-specific fields
+    festivalDetails: {
+      festivalName: { type: String, trim: true, default: "" },
+      category: { type: String, trim: true, default: "" },
+      description: { type: String, default: "" },
+      festivalStartDate: { type: Date },
+      festivalEndDate: { type: Date },
+      program: [
+        {
+          title: { type: String, trim: true, default: "" },
+          description: { type: String, default: "" },
+          startTime: { type: String, default: "" },
+          duration: { type: Number, default: 0 },
+        },
+      ],
       posterFileName: { type: String, trim: true, default: "" },
       posterUrl: { type: String, default: "" },
       posterDataUrl: { type: String, default: "" },
@@ -107,6 +133,7 @@ const eventSchema = new mongoose.Schema(
     media: {
       teaserUrl: { type: String, default: "" },
       galleryImageFileNames: [{ type: String }],
+      galleryImageUrls: [{ type: String }],
     },
   },
   { timestamps: true },
