@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { getEventById } from "../../api/eventApi";
+import { useAuth } from "../../context/AuthContext";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -19,6 +20,29 @@ const extractYouTubeId = (url) => {
   }
 
   return null;
+};
+
+const splitToTags = (value, fallback = []) => {
+  if (!value) return fallback;
+
+  const items = String(value)
+    .split(/[,/|]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length ? items : fallback;
+};
+
+const formatPrettyDate = (dateValue, timeValue) => {
+  if (!dateValue) return "Date TBA";
+
+  const eventDate = new Date(dateValue);
+  if (Number.isNaN(eventDate.getTime())) return "Date TBA";
+
+  const options = { year: "numeric", month: "long", day: "2-digit" };
+  const formattedDate = eventDate.toLocaleDateString("en-US", options);
+
+  return timeValue ? `${formattedDate} • ${timeValue}` : formattedDate;
 };
 
 const transformEventDetails = (backendEvent) => {
@@ -44,38 +68,6 @@ const transformEventDetails = (backendEvent) => {
       : `${API_URL}/${image}`;
   }
 
-  const eventDate = backendEvent.date ? new Date(backendEvent.date) : null;
-  let fullDate = "Date TBA";
-
-  if (eventDate) {
-    const options = { year: "numeric", month: "long", day: "2-digit" };
-    const formattedDate = eventDate.toLocaleDateString("en-US", options);
-    const time = backendEvent.startTime || "";
-    fullDate = time ? `${formattedDate} • ${time}` : formattedDate;
-  }
-
-  const fullLocation =
-    backendEvent.venueDetails?.name ||
-    backendEvent.venueDetails?.name ||
-    backendEvent.cinema ||
-    "Location TBA";
-
-  const priceNum = backendEvent.pricingDetails?.isFreeEvent
-    ? 0
-    : backendEvent.pricingDetails?.singlePrice || backendEvent.price || 0;
-
-  const fullPrice =
-    priceNum === 0
-      ? "Free"
-      : `${Number(priceNum).toLocaleString("en-US", {
-          minimumFractionDigits: 3,
-          maximumFractionDigits: 3,
-        })} TND`;
-
-  const gallery = backendEvent.media?.galleryImageUrls || [];
-  const galleryWithDefaults =
-    gallery.length > 0 ? gallery : image ? [image] : [];
-
   let teaserUrl =
     backendEvent.media?.teaserUrl || backendEvent.movieDetails?.teaserUrl || "";
 
@@ -89,6 +81,42 @@ const transformEventDetails = (backendEvent) => {
       : `${API_URL}/${teaserUrl}`;
   }
 
+  const priceNum = backendEvent.pricingDetails?.isFreeEvent
+    ? 0
+    : backendEvent.pricingDetails?.singlePrice || backendEvent.price || 0;
+
+  const fullPrice =
+    priceNum === 0
+      ? "Free"
+      : `${Number(priceNum).toLocaleString("en-US", {
+          minimumFractionDigits: 3,
+          maximumFractionDigits: 3,
+        })} TND`;
+
+  const fullDate = formatPrettyDate(backendEvent.date, backendEvent.startTime);
+
+  const fullLocation =
+    backendEvent.venueDetails?.name ||
+    backendEvent.cinema ||
+    backendEvent.venueDetails?.location ||
+    "Location TBA";
+
+  const gallery = backendEvent.media?.galleryImageUrls || [];
+  const galleryWithDefaults =
+    gallery.length > 0 ? gallery : image ? [image] : [];
+
+  const rawGenre =
+    backendEvent.movieDetails?.genre ||
+    backendEvent.festivalDetails?.category ||
+    "Adventure / Animation / Comedy";
+
+  const genreTags = splitToTags(rawGenre, ["Cinema"]);
+
+  const rawCast =
+    backendEvent.movieDetails?.cast || backendEvent.festivalDetails?.guests || "";
+
+  const castTags = splitToTags(rawCast, []);
+
   return {
     id: backendEvent._id,
     title,
@@ -101,10 +129,8 @@ const transformEventDetails = (backendEvent) => {
         : "Movie",
     maturity: "PG",
     duration: backendEvent.movieDetails?.duration || "1h 38min",
-    genre:
-      backendEvent.movieDetails?.genre ||
-      backendEvent.festivalDetails?.category ||
-      "Adventure / Animation / Comedy",
+    genre: rawGenre,
+    genreTags,
     fullDate,
     fullLocation,
     fullPrice,
@@ -114,9 +140,8 @@ const transformEventDetails = (backendEvent) => {
       "Event details coming soon.",
     gallery: galleryWithDefaults,
     cast:
-      backendEvent.movieDetails?.cast ||
-      backendEvent.festivalDetails?.guests ||
-      "Cast information coming soon",
+      rawCast || "Cast information coming soon",
+    castTags,
     director:
       backendEvent.movieDetails?.director ||
       backendEvent.festivalDetails?.organizer ||
@@ -129,12 +154,50 @@ const transformEventDetails = (backendEvent) => {
 };
 
 const InfoPill = ({ icon, label, value }) => (
-  <div className="rounded-lg border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
-    <div className="mb-1 flex items-center gap-1 text-white/50">
+  <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl">
+    <div className="mb-2 flex items-center gap-2 text-white/45">
       <span className="material-symbols-outlined text-[18px]">{icon}</span>
-      <span className="text-xs uppercase tracking-[0.2em]">{label}</span>
+      <span className="text-xs uppercase tracking-[0.22em]">{label}</span>
     </div>
-    <p className="text-xs font-medium text-white md:text-sm">{value}</p>
+    <p className="text-sm font-semibold leading-6 text-white md:text-[15px]">
+      {value}
+    </p>
+  </div>
+);
+
+const BookSeatsButton = ({ eventId }) => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleBookSeats = () => {
+    if (user) {
+      navigate(`/spectator/reservation-process/${eventId}`);
+    } else {
+      navigate(`/events/${eventId}/reserve`);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleBookSeats}
+      className="inline-flex items-center gap-3 rounded-full bg-white px-5 py-3 text-xs font-bold uppercase tracking-wide text-black shadow-2xl transition hover:scale-[1.02]"
+    >
+      <span className="material-symbols-outlined">confirmation_number</span>
+      Book seats
+    </button>
+  );
+};
+
+const TagList = ({ items }) => (
+  <div className="flex flex-wrap gap-2">
+    {items.map((item) => (
+      <span
+        key={item}
+        className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/85 backdrop-blur"
+      >
+        {item}
+      </span>
+    ))}
   </div>
 );
 
@@ -209,7 +272,8 @@ export default function EventDetailsPage() {
           </p>
           <Link
             to="/events"
-            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black transition hover:scale-[1.02]">
+            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black transition hover:scale-[1.02]"
+          >
             <span className="material-symbols-outlined text-[20px]">
               arrow_back
             </span>
@@ -223,7 +287,6 @@ export default function EventDetailsPage() {
   return (
     <main className="min-h-screen bg-[#06070a] text-white">
       <section className="relative overflow-hidden">
-        {/* BACKGROUND */}
         <div className="absolute inset-0">
           <div
             className="h-full min-h-[980px] w-full bg-cover bg-center"
@@ -236,9 +299,7 @@ export default function EventDetailsPage() {
           <div className="absolute bottom-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-amber-400/10 blur-3xl" />
         </div>
 
-        {/* CONTENT */}
         <div className="relative z-10 mx-auto grid min-h-screen max-w-7xl grid-cols-1 gap-6 px-4 pb-12 pt-20 md:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:px-12">
-          {/* LEFT SIDE */}
           <div className="flex flex-col justify-center">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-red-600 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.24em] text-white shadow-lg shadow-red-900/30">
@@ -269,14 +330,7 @@ export default function EventDetailsPage() {
             </p>
 
             <div className="mt-5 flex flex-wrap gap-3">
-              <Link
-                
-                className="inline-flex items-center gap-3 rounded-full bg-white px-5 py-3 text-xs font-bold uppercase tracking-wide text-black shadow-2xl transition hover:scale-[1.02]">
-                <span className="material-symbols-outlined">
-                  confirmation_number
-                </span>
-                Book seats
-              </Link>
+              <BookSeatsButton eventId={event.id} />
 
               {event.teaserUrl && (
                 <button
@@ -284,7 +338,8 @@ export default function EventDetailsPage() {
                     setShowVideoModal(true);
                     setVideoError("");
                   }}
-                  className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-xs font-bold uppercase tracking-wide text-white backdrop-blur-xl transition hover:scale-[1.02] hover:bg-white/15">
+                  className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-xs font-bold uppercase tracking-wide text-white backdrop-blur-xl transition hover:scale-[1.02] hover:bg-white/15"
+                >
                   <span className="material-symbols-outlined">play_circle</span>
                   Watch teaser
                 </button>
@@ -296,7 +351,6 @@ export default function EventDetailsPage() {
               </button>
             </div>
 
-            {/* STATS / INFO GRID */}
             <div className="mt-6 grid max-w-4xl gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <InfoPill
                 icon="calendar_month"
@@ -316,28 +370,43 @@ export default function EventDetailsPage() {
               />
             </div>
 
-            {/* EXTRA DETAILS */}
-            <div className="mt-6 max-w-4xl rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-2xl">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="mb-2 text-xs uppercase tracking-[0.25em] text-white/40">
+            <div className="mt-6 max-w-4xl grid gap-4 md:grid-cols-2">
+              <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 backdrop-blur-2xl transition hover:border-white/15">
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] text-white/65">
+                    groups
+                  </span>
+                  <p className="text-xs uppercase tracking-[0.25em] text-white/40">
                     Cast
                   </p>
-                  <p className="leading-7 text-white/80">{event.cast}</p>
                 </div>
-                <div>
-                  <p className="mb-2 text-xs uppercase tracking-[0.25em] text-white/40">
+
+                {event.castTags.length > 0 ? (
+                  <TagList items={event.castTags} />
+                ) : (
+                  <p className="text-sm italic leading-6 text-white/55">
+                    Cast will be announced soon
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 backdrop-blur-2xl transition hover:border-white/15">
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] text-white/65">
+                    location_on
+                  </span>
+                  <p className="text-xs uppercase tracking-[0.25em] text-white/40">
                     Venue address
                   </p>
-                  <p className="leading-7 text-white/80">
-                    {event.venueAddress}
-                  </p>
                 </div>
+
+                <p className="text-sm leading-7 text-white/80">
+                  {event.venueAddress}
+                </p>
               </div>
             </div>
           </div>
 
-          {/* RIGHT SIDE POSTER CARD */}
           <div className="flex items-center justify-center lg:justify-end">
             <div className="relative w-full max-w-sm">
               <div className="absolute -inset-4 rounded-2xl bg-gradient-to-b from-white/10 to-transparent blur-2xl" />
@@ -363,7 +432,8 @@ export default function EventDetailsPage() {
                         setVideoError("");
                       }}
                       className="absolute bottom-4 right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-xl transition hover:scale-105"
-                      aria-label="Play teaser">
+                      aria-label="Play teaser"
+                    >
                       <span className="material-symbols-outlined text-[26px]">
                         play_arrow
                       </span>
@@ -403,10 +473,8 @@ export default function EventDetailsPage() {
         </div>
       </section>
 
-      {/* LOWER CONTENT */}
       <section className="relative z-10 mx-auto max-w-7xl px-4 pb-16 md:px-8 lg:px-12">
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-          {/* LEFT */}
           <div className="space-y-6">
             <div className="rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur-2xl md:p-8">
               <div className="mb-3 flex items-center gap-2">
@@ -433,7 +501,8 @@ export default function EventDetailsPage() {
                   {event.gallery.map((img, index) => (
                     <div
                       key={`${event.id}-${index}`}
-                      className="group relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black">
+                      className="group relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black"
+                    >
                       <img
                         src={img}
                         alt={`${event.title}-${index}`}
@@ -447,7 +516,6 @@ export default function EventDetailsPage() {
             )}
           </div>
 
-          {/* RIGHT */}
           <div className="space-y-4">
             <div className="rounded-xl border border-white/10 bg-gradient-to-br from-red-500/15 to-amber-400/10 p-4 backdrop-blur-2xl">
               <p className="mb-2 text-xs uppercase tracking-[0.25em] text-white/40">
@@ -460,9 +528,7 @@ export default function EventDetailsPage() {
                 atmosphere.
               </p>
 
-              <Link
-                
-                className="mt-4 inline-flex w-full items-center justify-center gap-3 rounded-full bg-white px-5 py-3 text-xs font-bold uppercase tracking-wide text-black transition hover:scale-[1.02]">
+              <Link className="mt-4 inline-flex w-full items-center justify-center gap-3 rounded-full bg-white px-5 py-3 text-xs font-bold uppercase tracking-wide text-black transition hover:scale-[1.02]">
                 <span className="material-symbols-outlined">weekend</span>
                 Select seats
               </Link>
@@ -483,7 +549,9 @@ export default function EventDetailsPage() {
                   <p className="text-xs uppercase tracking-[0.22em] text-white/40">
                     Genre
                   </p>
-                  <p className="mt-1 text-sm text-white/85">{event.genre}</p>
+                  <div className="mt-2">
+                    <TagList items={event.genreTags} />
+                  </div>
                 </div>
 
                 <div>

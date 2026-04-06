@@ -1,19 +1,222 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import EventCard from "../../components/EventCard";
-import { events } from "../../data/events";
+import { useNavigate } from "react-router-dom";
+import { getEvents } from "../../api/eventApi";
 import heroImg from "../../images/upscalemedia-transformed.png";
-import parisImg from "../../images/Gemini_Generated_Image_8huwzw8huwzw8huw.png";
+import parisImg from "../../images/projecteur.png";
 
-const popularEvents = events;
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+const transformEventData = (backendEvent) => {
+  const API_URL = API_BASE_URL.replace("/api", "");
+
+  const title =
+    backendEvent.eventType === "festival"
+      ? backendEvent.festivalDetails?.festivalName ||
+        backendEvent.movieDetails?.title ||
+        "Untitled Event"
+      : backendEvent.movieDetails?.title || "Untitled Event";
+
+  let image =
+    backendEvent.movieDetails?.posterUrl ||
+    backendEvent.movieDetails?.posterDataUrl ||
+    backendEvent.festivalDetails?.posterUrl ||
+    backendEvent.festivalDetails?.posterDataUrl ||
+    "";
+
+  if (image && !image.startsWith("http") && !image.startsWith("data:")) {
+    image = image.startsWith("/")
+      ? `${API_URL}${image}`
+      : `${API_URL}/${image}`;
+  }
+
+  const priceNum = backendEvent.pricingDetails?.isFreeEvent
+    ? 0
+    : backendEvent.pricingDetails?.singlePrice || backendEvent.price || 0;
+
+  const price =
+    priceNum === 0
+      ? "Free"
+      : `${Number(priceNum).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} TND`;
+
+  const eventDate = backendEvent.date ? new Date(backendEvent.date) : null;
+  let formattedDate = "Date TBA";
+
+  if (eventDate) {
+    const month = eventDate.toLocaleDateString("en-US", { month: "short" });
+    const day = eventDate.getDate();
+    const year = eventDate.getFullYear();
+    const time = backendEvent.startTime || "";
+    formattedDate = time
+      ? `${month} ${day}, ${year} • ${time}`
+      : `${month} ${day}, ${year}`;
+  }
+
+  const location =
+    backendEvent.venueDetails?.venueTemplateName ||
+    backendEvent.cinema ||
+    backendEvent.venueDetails?.location ||
+    "Location TBA";
+
+  const rawGenre =
+    backendEvent.movieDetails?.genre || backendEvent.category || "Screening";
+
+  const genreTags = String(rawGenre)
+    .split(/[,/|]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return {
+    id: backendEvent._id,
+    title,
+    image: image || "",
+    price,
+    date: formattedDate,
+    location,
+    category: backendEvent.eventType === "festival" ? "Festival" : "Movie",
+    genres: genreTags.length ? genreTags : ["Screening"],
+    badge: backendEvent.charity?.isCharityEvent ? "Charity Event" : "",
+    isFestival: backendEvent.eventType === "festival",
+    rawDate: backendEvent.date ? new Date(backendEvent.date) : null,
+  };
+};
+
+function MovieEventCard({ event }) {
+  const navigate = useNavigate();
+  const hasImage = Boolean(event.image);
+
+  const handleViewDetails = () => {
+    navigate(`/events/${event.id}`);
+  };
+
+  return (
+    <article className="group overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.04] transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-2xl">
+      <div className="relative aspect-[3/4] overflow-hidden bg-charcoal">
+        {hasImage ? (
+          <img
+            src={event.image}
+            alt={event.title}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06]"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-white/5 text-white/30">
+            <span className="text-xs uppercase tracking-[0.3em]">
+              No Poster
+            </span>
+          </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+
+        <div className="absolute left-3 right-3 top-3 flex items-start justify-between">
+          <span className="rounded-full border border-white/15 bg-background-dark/70 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-white backdrop-blur">
+            {event.category}
+          </span>
+
+          <button className="text-white/80 transition-all duration-200 hover:scale-110 hover:text-white">
+            <span className="material-symbols-outlined text-[22px]">
+              favorite
+            </span>
+          </button>
+        </div>
+
+        <div className="absolute inset-x-0 bottom-0 p-3">
+          <div
+            className="
+              rounded-[20px]
+              border border-white/10
+              bg-black/20
+              backdrop-blur-md
+              p-3
+              transition-all duration-300
+              translate-y-[78%]
+              group-hover:translate-y-0
+            ">
+            <h3 className="text-sm font-bold text-white">{event.title}</h3>
+
+            <div className="mt-3 opacity-0 transition-all duration-300 group-hover:opacity-100">
+              <p className="text-xs font-medium text-accent">{event.price}</p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                {event.genres.map((genre) => (
+                  <span
+                    key={genre}
+                    className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-medium text-white/85">
+                    {genre}
+                  </span>
+                ))}
+              </div>
+
+              <div className="mt-3 space-y-2 text-xs text-white/75">
+                <div className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-[15px] text-accent">
+                    calendar_month
+                  </span>
+                  <span>{event.date}</span>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-[15px] text-accent">
+                    location_on
+                  </span>
+                  <span className="line-clamp-2">{event.location}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={handleViewDetails}
+                className="mt-3 w-full rounded-xl bg-accent px-4 py-2 text-sm font-bold text-background-dark transition-transform duration-200 hover:scale-[1.02]">
+                View Details
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
 
 export default function HomePage() {
   const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
   const showJoinCards = !(isAuthenticated && currentUser);
+  const [popularEvents, setPopularEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPopularEvents = async () => {
+      try {
+        setLoading(true);
+        const result = await getEvents({ status: "published", limit: 100 });
+
+        const publishedEvents = Array.isArray(result?.events)
+          ? result.events.map(transformEventData)
+          : [];
+
+        // Sort by date (most recent first) and limit to 6
+        publishedEvents.sort(
+          (a, b) => (b.rawDate?.getTime() || 0) - (a.rawDate?.getTime() || 0),
+        );
+        const recentEvents = publishedEvents.slice(0, 6);
+
+        setPopularEvents(recentEvents);
+      } catch (err) {
+        console.error("Failed to load popular events:", err);
+        setPopularEvents([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPopularEvents();
+  }, []);
 
   return (
     <>
-      <main className="w-full">
+      <main className="w-full bg-black">
         <section className="relative flex min-h-[85vh] w-full items-center justify-center overflow-hidden">
           <div className="absolute inset-0 z-0">
             <div
@@ -23,7 +226,7 @@ export default function HomePage() {
                 backgroundImage: `url(${heroImg})`,
               }}
             />
-            <div className="cinematic-gradient absolute inset-0 bg-black/50" />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/70" />
           </div>
 
           <div className="relative z-10 max-w-4xl px-6 text-center">
@@ -32,13 +235,13 @@ export default function HomePage() {
             </span>
 
             <h2 className="mb-6 font-serif-alt text-5xl font-black italic leading-[1.1] text-white drop-shadow-2xl md:text-7xl">
-              Experience The Magic of <br />{" "}
-              <span className="text-accent">The Silver Screen</span>
+              Discover unforgettable <br />{" "}
+              <span className="text-accent">cinematic events</span>
             </h2>
 
             <p className="mx-auto mb-10 max-w-2xl text-lg font-medium text-white/80 md:text-xl">
-              From exclusive film premieres to themed gala screenings. Discover
-              the most prestigious cinema events in your city.
+              From exclusive premieres to curated festivals and private
+              screenings, find the most elegant movie experiences in your city.
             </p>
 
             <div className="mx-auto max-w-4xl rounded-2xl border border-white/20 bg-white/10 p-3 shadow-2xl backdrop-blur-xl">
@@ -87,81 +290,101 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1440px] px-6 py-24 md:px-20">
-          <div className="mb-12 flex items-end justify-between">
-            <div>
-              <h3 className="mb-2 text-4xl font-black text-charcoal dark:text-white">
-                Popular Events
-              </h3>
-              <p className="text-charcoal/60 dark:text-white/60">
-                Handpicked cinematic experiences for this month.
-              </p>
+        <section className="mx-auto w-full px-6 py-24 md:px-20">
+          <div className="mx-auto max-w-[1440px]">
+            <div className="mb-12 flex items-end justify-between">
+              <div>
+                <h3 className="mb-2 text-4xl font-black text-white">
+                  Popular Events
+                </h3>
+                <p className="text-white/60">
+                  Handpicked cinematic experiences for this month.
+                </p>
+              </div>
+              <a
+                className="flex items-center gap-2 font-bold text-accent hover:underline"
+                href="/events">
+                View All Events{" "}
+                <span className="material-symbols-outlined">arrow_forward</span>
+              </a>
             </div>
-            <a
-              className="flex items-center gap-2 font-bold text-primary hover:underline dark:text-accent"
-              href="/events">
-              View All Events{" "}
-              <span className="material-symbols-outlined">arrow_forward</span>
-            </a>
-          </div>
 
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-            {popularEvents.map((event) => (
-              <EventCard event={event} key={event.title} />
-            ))}
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-5">
+              {loading ? (
+                <div className="col-span-full flex justify-center py-12">
+                  <p className="text-white/60">Loading popular events...</p>
+                </div>
+              ) : popularEvents.length > 0 ? (
+                popularEvents.map((event) => (
+                  <MovieEventCard event={event} key={event.id} />
+                ))
+              ) : (
+                <div className="col-span-full flex justify-center py-12">
+                  <p className="text-white/60">
+                    No events available at the moment.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
         {showJoinCards && (
           <section className="mx-auto max-w-[1440px] px-6 pb-24 md:px-20">
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-              <div className="group relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-xl p-10">
+              <div className="group relative overflow-hidden rounded-[24px] border border-white/10 min-h-[220px]">
                 <div
                   className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                  data-alt="Satisfied audience in a luxury cinema theater"
-                  style={{
-                    backgroundImage: `url(${heroImg})`,
-                  }}
+                  style={{ backgroundImage: `url(${heroImg})` }}
                 />
-                <div className="absolute inset-0 bg-primary/40 transition-colors group-hover:bg-primary/50" />
-                <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-transparent to-transparent" />
-                <div className="relative z-10">
-                  <h4 className="mb-3 text-3xl font-black text-white">
-                    Join as Spectator
+                <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/30" />
+
+                <div className="relative z-10 flex h-full flex-col justify-center p-6 md:p-8">
+                  <span className="mb-3 inline-flex w-fit rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-white/80 backdrop-blur">
+                    Membership
+                  </span>
+
+                  <h4 className="text-2xl font-black text-white md:text-3xl">
+                    For Spectators
                   </h4>
-                  <p className="mb-6 max-w-sm text-white/80">
-                    Access exclusive invites, member-only screenings, and
-                    premium cinematic perks.
+
+                  <p className="mt-3 max-w-md text-sm text-white/75 md:text-base">
+                    Access exclusive screenings, early releases, curated
+                    festivals, and premium cinema nights.
                   </p>
+
                   <a
-                    className="inline-flex items-center justify-center rounded-full bg-white px-8 py-3 font-bold text-primary transition-all hover:bg-accent hover:text-charcoal"
-                    href="/signup">
-                    Get Started
+                    href="/signup"
+                    className="mt-5 inline-flex w-fit items-center justify-center rounded-full bg-accent px-6 py-3 text-sm font-bold text-charcoal transition-all hover:scale-[1.02] hover:bg-white">
+                    Join Now
                   </a>
                 </div>
               </div>
 
-              <div className="group relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-xl p-10">
+              <div className="group relative overflow-hidden rounded-[24px] border border-white/10 min-h-[220px]">
                 <div
                   className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                  data-alt="Event organizer planning a film set event"
-                  style={{
-                    backgroundImage: `url(${parisImg})`,
-                  }}
+                  style={{ backgroundImage: `url(${parisImg})` }}
                 />
-                <div className="absolute inset-0 bg-charcoal/60 transition-colors group-hover:bg-charcoal/70" />
-                <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent" />
-                <div className="relative z-10">
-                  <h4 className="mb-3 text-3xl font-black text-white">
-                    Join as Organizer
+                <div className="absolute inset-0 bg-gradient-to-r from-charcoal/90 via-charcoal/60 to-charcoal/30" />
+
+                <div className="relative z-10 flex h-full flex-col justify-center p-6 md:p-8">
+                  <span className="mb-3 inline-flex w-fit rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-white/80 backdrop-blur">
+                    Creator
+                  </span>
+
+                  <h4 className="text-2xl font-black text-white md:text-3xl">
+                    For Organizers
                   </h4>
-                  <p className="mb-6 max-w-sm text-white/80">
-                    Host your own film festival or private screening. We provide
-                    the platform and the prestige.
+
+                  <p className="mt-3 max-w-md text-sm text-white/75 md:text-base">
+                    Launch festivals, host private screenings, and manage
+                    high-end movie experiences effortlessly.
                   </p>
+
                   <a
-                    className="inline-flex items-center justify-center rounded-full bg-accent px-8 py-3 font-bold text-charcoal transition-all hover:bg-white"
-                    href="/organizer-registration">
+                    href="/organizer-registration"
+                    className="mt-5 inline-flex w-fit items-center justify-center rounded-full bg-accent px-6 py-3 text-sm font-bold text-charcoal transition-all hover:scale-[1.02] hover:bg-white">
                     Host an Event
                   </a>
                 </div>
