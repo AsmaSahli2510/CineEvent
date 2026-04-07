@@ -19,7 +19,6 @@ const buildOrganizerEventDocument = (
   const movie = payload?.movie || {};
   const categories = pricing?.categories || {};
 
-  // Dynamically extract category prices
   const categoryPrices = {};
   if (typeof categories === "object" && categories !== null) {
     Object.entries(categories).forEach(([key, value]) => {
@@ -43,13 +42,16 @@ const buildOrganizerEventDocument = (
   const dateFromIso = projection?.dateTimeIso
     ? new Date(projection.dateTimeIso)
     : null;
+
   const dateFromSplit =
     projection?.date && projection?.time
       ? new Date(`${projection.date}T${projection.time}`)
       : null;
+
   const fallbackDate = payload?.submittedAt
     ? new Date(payload.submittedAt)
     : new Date();
+
   const resolvedDate =
     dateFromIso && !Number.isNaN(dateFromIso.valueOf())
       ? dateFromIso
@@ -164,11 +166,11 @@ const getEvents = async (req, res) => {
     const events = await Event.find(filter)
       .populate("movie", "title poster duration")
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(parseInt(limit, 10))
       .sort({ date: 1 });
 
     res.json({
-      events,
+      events: events.map((event) => event.toObject({ flattenMaps: true })),
       pagination: buildPaginationMeta(total, page, limit),
     });
   } catch (error) {
@@ -182,11 +184,11 @@ const getEvents = async (req, res) => {
 const getEventById = async (req, res) => {
   try {
     const event = await Event.findById(req.params.id).populate("movie");
+
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
     }
 
-    // Get all reserved seats for this event
     const Reservation = require("../models/Reservation");
     const reservations = await Reservation.find({
       event: req.params.id,
@@ -194,16 +196,17 @@ const getEventById = async (req, res) => {
       paymentStatus: "paid",
     });
 
-    // Extract reserved seats from confirmed paid reservations
     const reservedSeats = [];
-    reservations.forEach((res) => {
-      if (res.selectedSeats && Array.isArray(res.selectedSeats)) {
-        reservedSeats.push(...res.selectedSeats);
+    reservations.forEach((reservation) => {
+      if (
+        Array.isArray(reservation.selectedSeats) &&
+        reservation.selectedSeats.length > 0
+      ) {
+        reservedSeats.push(...reservation.selectedSeats);
       }
     });
 
-    // Add reserved seats to event response
-    const eventData = event.toObject();
+    const eventData = event.toObject({ flattenMaps: true });
     eventData.reservedSeats = reservedSeats;
 
     res.json(eventData);
@@ -226,8 +229,12 @@ const getMyEvents = async (req, res) => {
 
     const filter =
       req.user.role === "organizer" ? { organizer: req.user._id } : {};
+
     const events = await Event.find(filter).sort({ createdAt: -1 });
-    res.json({ events });
+
+    res.json({
+      events: events.map((event) => event.toObject({ flattenMaps: true })),
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -270,6 +277,7 @@ const createEvent = async (req, res) => {
     const isOrganizerSubmissionPayload = Boolean(
       parsedBody?.movie && parsedBody?.projection && parsedBody?.venue,
     );
+
     const payload =
       req.user.role === "organizer" && isOrganizerSubmissionPayload
         ? buildOrganizerEventDocument(
@@ -287,7 +295,7 @@ const createEvent = async (req, res) => {
     }
 
     const event = await Event.create(payload);
-    res.status(201).json(event);
+    res.status(201).json(event.toObject({ flattenMaps: true }));
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -302,10 +310,12 @@ const updateEvent = async (req, res) => {
       new: true,
       runValidators: true,
     });
+
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
     }
-    res.json(event);
+
+    res.json(event.toObject({ flattenMaps: true }));
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -317,9 +327,11 @@ const updateEvent = async (req, res) => {
 const deleteEvent = async (req, res) => {
   try {
     const event = await Event.findByIdAndDelete(req.params.id);
+
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
     }
+
     res.json({ message: "Event removed" });
   } catch (error) {
     res.status(500).json({ message: error.message });

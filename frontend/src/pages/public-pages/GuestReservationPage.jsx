@@ -13,7 +13,6 @@ import {
   confirmGuestReservation,
 } from "../../api/reservationApi";
 
-// Load Stripe from window object (loaded via CDN in index.html)
 let stripePromise = null;
 
 const loadStripePromise = () => {
@@ -51,6 +50,25 @@ const ROW_TEXT_CLASS = {
   bench: "text-amber-300",
 };
 
+function parsePrice(value) {
+  if (typeof value === "number") return value;
+  return Number(String(value ?? "").replace(/[^0-9.]/g, "")) || 0;
+}
+
+function normalizeCategories(categories) {
+  if (!categories) return {};
+
+  if (categories instanceof Map) {
+    return Object.fromEntries(categories.entries());
+  }
+
+  if (typeof categories === "object") {
+    return { ...categories };
+  }
+
+  return {};
+}
+
 function getSeatTypeFromRow(row, seatNumber) {
   const seatKey = String(seatNumber);
   const seatOverrides = row?.seatOverrides || {};
@@ -67,21 +85,6 @@ function getSeatTypeFromRow(row, seatNumber) {
   return row?.zoneId || "standard";
 }
 
-function parsePrice(value) {
-  if (typeof value === "number") return value;
-  return Number(String(value ?? "").replace(/[^0-9.]/g, "")) || 0;
-}
-
-function getCategoryPrice(categoryPrices, seatType, fallbackPrice = 0) {
-  const categories = categoryPrices || {};
-
-  if (Object.prototype.hasOwnProperty.call(categories, seatType)) {
-    return parsePrice(categories[seatType]);
-  }
-
-  return parsePrice(fallbackPrice);
-}
-
 function buildSeatId(row, seatNumber, rowIndex) {
   return `${row?.id || row?.label || String.fromCharCode(65 + rowIndex)}-${seatNumber}`;
 }
@@ -93,7 +96,6 @@ function findRowBySeatId(rows = [], seatId = "") {
   });
 }
 
-// Stripe Payment Form Component
 function StripePaymentForm({
   event,
   selectedSeats,
@@ -512,7 +514,6 @@ function StripePaymentForm({
   );
 }
 
-// Main Page Component
 export default function GuestReservationPage() {
   const { eventId } = useParams();
   const { currentUser } = useSelector((state) => state.auth);
@@ -549,8 +550,16 @@ export default function GuestReservationPage() {
 
         const backendEvent = await getEventById(eventId);
 
-        const categoryObj = backendEvent?.pricingDetails?.categories || {};
-        setCategoryPrices(categoryObj);
+        const normalizedCategories = normalizeCategories(
+          backendEvent?.pricingDetails?.categories,
+        );
+
+        console.log("backendEvent =", backendEvent);
+        console.log("pricingDetails =", backendEvent?.pricingDetails);
+        console.log("categories =", normalizedCategories);
+        console.log("category keys =", Object.keys(normalizedCategories));
+
+        setCategoryPrices(normalizedCategories);
 
         const transformedEvent = {
           id: backendEvent._id,
@@ -570,20 +579,17 @@ export default function GuestReservationPage() {
             ? new Date(backendEvent.date).toLocaleDateString()
             : "Date TBA",
           location:
-            backendEvent.venueDetails?.name ||
+            backendEvent.venueDetails?.venueTemplateName ||
+            backendEvent.venueDetails?.location ||
             backendEvent.cinema ||
             "Location TBA",
         };
 
         setEvent(transformedEvent);
         setReservedSeats(backendEvent.reservedSeats || []);
-
-        if (backendEvent.venueSnapshot) {
-          setVenueTemplate(backendEvent.venueSnapshot);
-        } else {
-          setVenueTemplate(null);
-        }
+        setVenueTemplate(backendEvent.venueSnapshot || null);
       } catch (err) {
+        console.error(err);
         setError(err.message || "Failed to load event");
         setEvent(null);
       } finally {
@@ -598,7 +604,12 @@ export default function GuestReservationPage() {
 
   const getSeatPrice = (row, seatNumber) => {
     const seatType = getSeatTypeFromRow(row, seatNumber);
-    return getCategoryPrice(categoryPrices, seatType, event?.price || 0);
+
+    if (Object.prototype.hasOwnProperty.call(categoryPrices, seatType)) {
+      return parsePrice(categoryPrices[seatType]);
+    }
+
+    return parsePrice(event?.price || 0);
   };
 
   const selectedSeatDetails = useMemo(() => {
@@ -624,12 +635,12 @@ export default function GuestReservationPage() {
       .filter(Boolean);
   }, [selectedSeats, venueTemplate, categoryPrices, event]);
 
-  const calculateTicketSubtotal = () => {
-    return selectedSeatDetails.reduce((sum, seat) => sum + seat.price, 0);
-  };
+  const ticketSubtotal = selectedSeatDetails.reduce(
+    (sum, seat) => sum + seat.price,
+    0,
+  );
 
   const ticketCount = selectedSeats.length;
-  const ticketSubtotal = calculateTicketSubtotal();
   const bookingFee =
     ticketCount > 0 ? Number((ticketSubtotal * 0.075).toFixed(3)) : 0;
   const totalAmount = ticketSubtotal + bookingFee;
@@ -798,7 +809,11 @@ export default function GuestReservationPage() {
                       const seatCount = Math.max(1, Number(row?.seats) || 1);
                       const counts = {};
 
-                      for (let seatNumber = 1; seatNumber <= seatCount; seatNumber += 1) {
+                      for (
+                        let seatNumber = 1;
+                        seatNumber <= seatCount;
+                        seatNumber += 1
+                      ) {
                         const seatType = getSeatTypeFromRow(row, seatNumber);
                         counts[seatType] = (counts[seatType] || 0) + 1;
                       }

@@ -23,11 +23,12 @@ const eventSchema = new mongoose.Schema(
       required: [true, "Event type is required"],
       default: "movie",
     },
-    // Movie-specific fields
+
     movie: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Movie",
     },
+
     movieDetails: {
       title: { type: String, trim: true, default: "" },
       genre: { type: String, trim: true, default: "" },
@@ -38,7 +39,7 @@ const eventSchema = new mongoose.Schema(
       posterUrl: { type: String, default: "" },
       posterDataUrl: { type: String, default: "" },
     },
-    // Festival-specific fields
+
     festivalDetails: {
       festivalName: { type: String, trim: true, default: "" },
       category: { type: String, trim: true, default: "" },
@@ -57,37 +58,46 @@ const eventSchema = new mongoose.Schema(
       posterUrl: { type: String, default: "" },
       posterDataUrl: { type: String, default: "" },
     },
+
     cinema: {
       type: String,
       required: [true, "Cinema name is required"],
       trim: true,
     },
+
     hall: {
       type: String,
       required: [true, "Hall is required"],
     },
+
     date: {
       type: Date,
       required: [true, "Event date is required"],
     },
+
     startTime: {
       type: String,
       required: [true, "Start time is required"],
     },
+
     endTime: {
       type: String,
     },
+
     totalSeats: {
       type: Number,
       required: [true, "Total seats is required"],
     },
+
     availableSeats: {
       type: Number,
     },
+
     price: {
       type: Number,
       required: [true, "Ticket price is required"],
     },
+
     status: {
       type: String,
       enum: [
@@ -101,16 +111,19 @@ const eventSchema = new mongoose.Schema(
       ],
       default: "scheduled",
     },
+
     venueDetails: {
       venueTemplateId: { type: String, default: "" },
       venueTemplateName: { type: String, default: "" },
       location: { type: String, default: "" },
       venueType: { type: String, default: "" },
     },
+
     venueSnapshot: {
       screenLabel: { type: String, default: "SCREEN" },
       rows: [Schema.Types.Mixed],
     },
+
     pricingDetails: {
       currency: { type: String, default: "TND" },
       isFreeEvent: { type: Boolean, default: false },
@@ -125,18 +138,24 @@ const eventSchema = new mongoose.Schema(
       serviceFee: { type: Number, default: 0 },
       spectatorTotal: { type: Number, default: 0 },
     },
+
     charity: {
       isCharityEvent: { type: Boolean, default: false },
       beneficiaryAssociation: { type: String, default: "" },
       minimumDonationSuggestion: { type: Number, default: 0 },
     },
+
     media: {
       teaserUrl: { type: String, default: "" },
       galleryImageFileNames: [{ type: String }],
       galleryImageUrls: [{ type: String }],
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    toJSON: { flattenMaps: true },
+    toObject: { flattenMaps: true },
+  },
 );
 
 eventSchema.pre("save", function (next) {
