@@ -279,7 +279,13 @@ function buildStateFromPreset(preset) {
     ambience: preset.ambience,
     covered: preset.covered,
     rows: withIds(preset.rows),
-    structures: preset.structures,
+    structures: (preset.structures || []).map((structure) => ({
+      ...structure,
+      id:
+        structure.editorId ||
+        structure.id ||
+        `s-${Math.random().toString(36).slice(2, 6)}`,
+    })),
   };
 }
 
@@ -338,6 +344,7 @@ export default function CreateRoomTemplatePage() {
       : previewOnly
         ? "/organizer/events/create"
         : "/admin/dashboard";
+
   const [editor, setEditor] = useState(() =>
     buildStateFromPreset(VENUE_PRESETS[0]),
   );
@@ -359,6 +366,8 @@ export default function CreateRoomTemplatePage() {
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
   useEffect(() => {
     editorRef.current = editor;
@@ -407,7 +416,7 @@ export default function CreateRoomTemplatePage() {
     return () => {
       isMounted = false;
     };
-  }, [requestedTemplateId]);
+  }, [requestedTemplateId, previewOnly]);
 
   const selectedRow = useMemo(
     () => editor.rows.find((row) => row.id === selectedRowId) || null,
@@ -456,6 +465,23 @@ export default function CreateRoomTemplatePage() {
 
     return summary;
   }, [editor.rows]);
+
+  const structureGroups = useMemo(() => {
+    const initial = {
+      north: [],
+      south: [],
+      east: [],
+      west: [],
+      center: [],
+    };
+
+    editor.structures.forEach((structure) => {
+      const side = SIDES.includes(structure.side) ? structure.side : "center";
+      initial[side].push(structure);
+    });
+
+    return initial;
+  }, [editor.structures]);
 
   const announce = (text) => {
     setNotice(text);
@@ -661,12 +687,13 @@ export default function CreateRoomTemplatePage() {
       return;
     }
 
+    const remaining = editor.rows.filter((row) => row.id !== selectedRowId);
+
     commit((draft) => {
       draft.rows = draft.rows.filter((row) => row.id !== selectedRowId);
       return draft;
     });
 
-    const remaining = editor.rows.filter((row) => row.id !== selectedRowId);
     setSelectedRowId(remaining[0]?.id || null);
     if (selectedSeat?.rowId === selectedRowId) {
       setSelectedSeat(null);
@@ -707,6 +734,10 @@ export default function CreateRoomTemplatePage() {
       return;
     }
 
+    const remaining = editor.structures.filter(
+      (structure) => structure.id !== selectedStructureId,
+    );
+
     commit((draft) => {
       draft.structures = draft.structures.filter(
         (structure) => structure.id !== selectedStructureId,
@@ -714,10 +745,65 @@ export default function CreateRoomTemplatePage() {
       return draft;
     });
 
-    const remaining = editor.structures.filter(
-      (structure) => structure.id !== selectedStructureId,
-    );
     setSelectedStructureId(remaining[0]?.id || null);
+  };
+
+  const handleAIGenerate = async () => {
+    if (!aiPrompt.trim()) {
+      announce("Please write a prompt for AI generation.");
+      return;
+    }
+
+    try {
+      setIsGeneratingAI(true);
+
+      const res = await fetch("/api/ai/generate-layout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prompt: aiPrompt.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || "AI generation failed.");
+      }
+
+      const rowsWithIds = withIds(data.rows || []);
+      const structuresWithIds = (data.structures || []).map((structure) => ({
+        ...structure,
+        id:
+          structure.editorId ||
+          structure.id ||
+          `s-${Math.random().toString(36).slice(2, 6)}`,
+      }));
+
+      commit((draft) => {
+        draft.presetId = "custom";
+        draft.templateName = data.name || draft.templateName;
+        draft.subtitle = data.subtitle || draft.subtitle;
+        draft.screenLabel = data.screenLabel || draft.screenLabel;
+        draft.ambience = data.ambience || draft.ambience;
+        draft.covered =
+          typeof data.covered === "boolean" ? data.covered : draft.covered;
+        draft.rows = rowsWithIds;
+        draft.structures = structuresWithIds;
+        return draft;
+      });
+
+      setTemplateId(null);
+      setSelectedRowId(rowsWithIds[0]?.id || null);
+      setSelectedStructureId(structuresWithIds[0]?.id || null);
+      setSelectedSeat(null);
+      announce("AI venue generated successfully.");
+    } catch (error) {
+      console.error("AI generation error:", error);
+      announce(error.message || "AI generation failed.");
+    } finally {
+      setIsGeneratingAI(false);
+    }
   };
 
   const saveTemplate = async () => {
@@ -773,23 +859,8 @@ export default function CreateRoomTemplatePage() {
       : editor.ambience === "festival"
         ? "bg-gradient-to-b from-primary/25 via-background-dark to-background-dark"
         : "bg-background-dark";
+
   const isPreview = mode === "preview";
-  const structureGroups = useMemo(() => {
-    const initial = {
-      north: [],
-      south: [],
-      east: [],
-      west: [],
-      center: [],
-    };
-
-    editor.structures.forEach((structure) => {
-      const side = SIDES.includes(structure.side) ? structure.side : "center";
-      initial[side].push(structure);
-    });
-
-    return initial;
-  }, [editor.structures]);
 
   return (
     <>
@@ -810,7 +881,8 @@ export default function CreateRoomTemplatePage() {
           content: "";
           position: absolute;
           inset: 0;
-          background-image: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.2) 1px, transparent 1px),
+          background-image:
+            radial-gradient(circle at 20% 20%, rgba(255,255,255,0.2) 1px, transparent 1px),
             radial-gradient(circle at 70% 30%, rgba(245,192,101,0.3) 1px, transparent 1px),
             radial-gradient(circle at 40% 75%, rgba(255,255,255,0.15) 1px, transparent 1px);
           background-size: 160px 160px;
@@ -837,6 +909,11 @@ export default function CreateRoomTemplatePage() {
         .room-template-page select optgroup {
           background-color: #232323;
           color: #f5f5f5;
+        }
+
+        .room-template-page textarea::placeholder,
+        .room-template-page input::placeholder {
+          color: rgba(255,255,255,0.35);
         }
       `}</style>
 
@@ -894,6 +971,7 @@ export default function CreateRoomTemplatePage() {
                 </button>
               </div>
             )}
+
             {isPreview ? null : (
               <>
                 <button
@@ -917,6 +995,7 @@ export default function CreateRoomTemplatePage() {
                 </button>
               </>
             )}
+
             {isLoadingTemplate ? (
               <span className="text-[10px] font-bold uppercase tracking-widest text-accent/80">
                 Loading template...
@@ -928,6 +1007,41 @@ export default function CreateRoomTemplatePage() {
         <div className="flex flex-1 overflow-hidden">
           {isPreview ? null : (
             <aside className="w-14 lg:w-56 border-r border-white/5 bg-charcoal flex flex-col p-2 lg:p-4 overflow-y-auto custom-scrollbar">
+              <div className="mb-6">
+                <h3 className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-3 hidden lg:block">
+                  AI Venue Generator
+                </h3>
+                <div className="space-y-2">
+                  <textarea
+                    className="hidden lg:block w-full min-h-[120px] resize-none bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white focus:outline-none focus:border-accent"
+                    placeholder="Describe your venue... Example: Create a venue called Sunset Festival Arena, open sky, festival ambience, 8 rows with 14 seats each, seat 7 bench in every row, row 8 has 2 PMR seats, add entrance north and bar east."
+                    value={aiPrompt}
+                    onChange={(event) => setAiPrompt(event.target.value)}
+                  />
+                  <button
+                    className="w-full p-2 rounded-lg border border-accent/50 bg-accent/10 hover:bg-accent/20 text-left transition-all"
+                    onClick={handleAIGenerate}
+                    type="button"
+                    disabled={isGeneratingAI}>
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-accent text-[18px]">
+                        auto_awesome
+                      </span>
+                      <div className="hidden lg:block">
+                        <p className="text-[11px] font-bold text-white leading-none">
+                          {isGeneratingAI
+                            ? "Generating..."
+                            : "Generate with AI"}
+                        </p>
+                        <p className="text-[9px] text-white/50 mt-0.5">
+                          Name, layout, ambience, structures
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               <div className="mb-6">
                 <h3 className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-3 hidden lg:block">
                   Venue Preset
@@ -1063,9 +1177,7 @@ export default function CreateRoomTemplatePage() {
                         }`}
                         disabled={isPreview}
                         onClick={() => {
-                          if (isPreview) {
-                            return;
-                          }
+                          if (isPreview) return;
                           setSelectedStructureId(structure.id);
                         }}
                         type="button">
@@ -1097,9 +1209,38 @@ export default function CreateRoomTemplatePage() {
                           }`}
                           disabled={isPreview}
                           onClick={() => {
-                            if (isPreview) {
-                              return;
-                            }
+                            if (isPreview) return;
+                            setSelectedStructureId(structure.id);
+                          }}
+                          type="button">
+                          <span className="material-symbols-outlined text-sm">
+                            {structureMeta.icon}
+                          </span>
+                          {structure.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {structureGroups.east.length ? (
+                  <div className="absolute left-full top-[52%] ml-3 flex -translate-y-1/2 flex-col items-start gap-1.5">
+                    {structureGroups.east.map((structure) => {
+                      const structureMeta =
+                        STRUCTURE_LIBRARY.find(
+                          (item) => item.type === structure.type,
+                        ) || STRUCTURE_LIBRARY[0];
+                      return (
+                        <button
+                          key={structure.id}
+                          className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
+                            !isPreview && selectedStructureId === structure.id
+                              ? "border-accent bg-accent/15 text-accent"
+                              : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                          }`}
+                          disabled={isPreview}
+                          onClick={() => {
+                            if (isPreview) return;
                             setSelectedStructureId(structure.id);
                           }}
                           type="button">
@@ -1130,6 +1271,7 @@ export default function CreateRoomTemplatePage() {
                       const isSelectedSeat =
                         selectedSeat?.rowId === row.id &&
                         selectedSeat?.number === seatIndex;
+
                       seatNodes.push(
                         <button
                           key={`${row.id}-seat-${seatIndex}`}
@@ -1138,9 +1280,7 @@ export default function CreateRoomTemplatePage() {
                           } ${mode === "preview" ? "opacity-85" : ""}`}
                           disabled={isPreview}
                           onClick={(event) => {
-                            if (isPreview) {
-                              return;
-                            }
+                            if (isPreview) return;
                             event.stopPropagation();
                             setSelectedRowId(row.id);
                             setSelectedSeat({
@@ -1188,9 +1328,7 @@ export default function CreateRoomTemplatePage() {
                               : "border-transparent hover:border-white/15 hover:bg-white/5"
                         }`}
                         onClick={() => {
-                          if (isPreview) {
-                            return;
-                          }
+                          if (isPreview) return;
                           setSelectedRowId(row.id);
                           setSelectedSeat(null);
                         }}>
@@ -1211,68 +1349,33 @@ export default function CreateRoomTemplatePage() {
               </div>
 
               <div className="mt-8 w-full max-w-3xl space-y-2">
-                <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
-                  <div />
-                  <div className="flex flex-wrap items-center justify-center gap-1.5">
-                    {structureGroups.center.map((structure) => {
-                      const structureMeta =
-                        STRUCTURE_LIBRARY.find(
-                          (item) => item.type === structure.type,
-                        ) || STRUCTURE_LIBRARY[0];
-                      return (
-                        <button
-                          key={structure.id}
-                          className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
-                            !isPreview && selectedStructureId === structure.id
-                              ? "border-accent bg-accent/15 text-accent"
-                              : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
-                          }`}
-                          disabled={isPreview}
-                          onClick={() => {
-                            if (isPreview) {
-                              return;
-                            }
-                            setSelectedStructureId(structure.id);
-                          }}
-                          type="button">
-                          <span className="material-symbols-outlined text-sm">
-                            {structureMeta.icon}
-                          </span>
-                          {structure.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="flex flex-wrap items-center justify-start gap-1.5">
-                    {structureGroups.east.map((structure) => {
-                      const structureMeta =
-                        STRUCTURE_LIBRARY.find(
-                          (item) => item.type === structure.type,
-                        ) || STRUCTURE_LIBRARY[0];
-                      return (
-                        <button
-                          key={structure.id}
-                          className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
-                            !isPreview && selectedStructureId === structure.id
-                              ? "border-accent bg-accent/15 text-accent"
-                              : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
-                          }`}
-                          disabled={isPreview}
-                          onClick={() => {
-                            if (isPreview) {
-                              return;
-                            }
-                            setSelectedStructureId(structure.id);
-                          }}
-                          type="button">
-                          <span className="material-symbols-outlined text-sm">
-                            {structureMeta.icon}
-                          </span>
-                          {structure.name}
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  {structureGroups.center.map((structure) => {
+                    const structureMeta =
+                      STRUCTURE_LIBRARY.find(
+                        (item) => item.type === structure.type,
+                      ) || STRUCTURE_LIBRARY[0];
+                    return (
+                      <button
+                        key={structure.id}
+                        className={`px-2.5 py-1.5 rounded-full border text-[10px] uppercase tracking-[0.12em] flex items-center gap-1 transition-all ${
+                          !isPreview && selectedStructureId === structure.id
+                            ? "border-accent bg-accent/15 text-accent"
+                            : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                        }`}
+                        disabled={isPreview}
+                        onClick={() => {
+                          if (isPreview) return;
+                          setSelectedStructureId(structure.id);
+                        }}
+                        type="button">
+                        <span className="material-symbols-outlined text-sm">
+                          {structureMeta.icon}
+                        </span>
+                        {structure.name}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {structureGroups.south.length ? (
@@ -1292,9 +1395,7 @@ export default function CreateRoomTemplatePage() {
                           }`}
                           disabled={isPreview}
                           onClick={() => {
-                            if (isPreview) {
-                              return;
-                            }
+                            if (isPreview) return;
                             setSelectedStructureId(structure.id);
                           }}
                           type="button">
@@ -1383,6 +1484,30 @@ export default function CreateRoomTemplatePage() {
                       type="text"
                       value={editor.subtitle}
                     />
+                    <input
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white focus:outline-none focus:border-accent"
+                      onChange={(event) =>
+                        setEditor((prev) => ({
+                          ...prev,
+                          screenLabel: event.target.value,
+                        }))
+                      }
+                      type="text"
+                      value={editor.screenLabel}
+                    />
+                    <select
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-white focus:outline-none focus:border-accent"
+                      onChange={(event) =>
+                        setEditor((prev) => ({
+                          ...prev,
+                          ambience: event.target.value,
+                        }))
+                      }
+                      value={editor.ambience}>
+                      <option value="dark">Dark</option>
+                      <option value="sky">Sky</option>
+                      <option value="festival">Festival</option>
+                    </select>
                     <button
                       className={`w-full rounded-lg text-[11px] font-bold border px-2.5 py-1.5 ${
                         editor.covered

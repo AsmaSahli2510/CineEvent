@@ -12,6 +12,7 @@ const movieRoutes = require("./routes/movieRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const reservationRoutes = require("./routes/reservationRoutes");
 const venueTemplateRoutes = require("./routes/venueTemplateRoutes");
+const aiRoutes = require("./routes/aiRoutes");
 
 dotenv.config();
 
@@ -59,6 +60,7 @@ app.use("/api/movies", movieRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/venue-templates", venueTemplateRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
