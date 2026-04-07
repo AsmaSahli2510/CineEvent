@@ -1,6 +1,15 @@
-const Reservation = require('../models/Reservation');
-const Event = require('../models/Event');
-const { paginate, buildPaginationMeta } = require('../utils/helpers');
+const Reservation = require("../models/Reservation");
+const Event = require("../models/Event");
+const { paginate, buildPaginationMeta } = require("../utils/helpers");
+const { sendTicketEmail } = require("../utils/email");
+
+// Lazy-load Stripe to avoid errors if API key is not set
+const getStripeClient = () => {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY environment variable is not set");
+  }
+  return require("stripe")(process.env.STRIPE_SECRET_KEY);
+};
 
 // @desc    Create a reservation
 // @route   POST /api/reservations
@@ -11,11 +20,11 @@ const createReservation = async (req, res) => {
 
     const event = await Event.findById(eventId);
     if (!event) {
-      return res.status(404).json({ message: 'Event not found' });
+      return res.status(404).json({ message: "Event not found" });
     }
 
     if (event.availableSeats < seats) {
-      return res.status(400).json({ message: 'Not enough available seats' });
+      return res.status(400).json({ message: "Not enough available seats" });
     }
 
     const totalPrice = event.price * seats;
@@ -44,9 +53,20 @@ const getMyReservations = async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
     const { skip } = paginate(page, limit);
 
-    const total = await Reservation.countDocuments({ user: req.user._id });
-    const reservations = await Reservation.find({ user: req.user._id })
-      .populate({ path: 'event', populate: { path: 'movie', select: 'title poster' } })
+    // Fetch both authenticated user reservations AND guest reservations with matching email
+    const query = {
+      $or: [
+        { user: req.user._id }, // Authenticated user reservations
+        { "guestInfo.email": req.user.email }, // Guest reservations with matching email
+      ],
+    };
+
+    const total = await Reservation.countDocuments(query);
+    const reservations = await Reservation.find(query)
+      .populate({
+        path: "event",
+        populate: { path: "movie", select: "title poster" },
+      })
       .skip(skip)
       .limit(parseInt(limit))
       .sort({ createdAt: -1 });
@@ -73,8 +93,8 @@ const getAllReservations = async (req, res) => {
 
     const total = await Reservation.countDocuments(filter);
     const reservations = await Reservation.find(filter)
-      .populate('user', 'name email')
-      .populate({ path: 'event', populate: { path: 'movie', select: 'title' } })
+      .populate("user", "name email")
+      .populate({ path: "event", populate: { path: "movie", select: "title" } })
       .skip(skip)
       .limit(parseInt(limit))
       .sort({ createdAt: -1 });
@@ -95,18 +115,21 @@ const cancelReservation = async (req, res) => {
   try {
     const reservation = await Reservation.findById(req.params.id);
     if (!reservation) {
-      return res.status(404).json({ message: 'Reservation not found' });
+      return res.status(404).json({ message: "Reservation not found" });
     }
 
-    if (reservation.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Not authorized' });
+    if (
+      reservation.user.toString() !== req.user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      return res.status(403).json({ message: "Not authorized" });
     }
 
-    if (reservation.status === 'cancelled') {
-      return res.status(400).json({ message: 'Reservation already cancelled' });
+    if (reservation.status === "cancelled") {
+      return res.status(400).json({ message: "Reservation already cancelled" });
     }
 
-    reservation.status = 'cancelled';
+    reservation.status = "cancelled";
     await reservation.save();
 
     const event = await Event.findById(reservation.event);
@@ -115,10 +138,192 @@ const cancelReservation = async (req, res) => {
       await event.save();
     }
 
-    res.json({ message: 'Reservation cancelled', reservation });
+    res.json({ message: "Reservation cancelled", reservation });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-module.exports = { createReservation, getMyReservations, getAllReservations, cancelReservation };
+module.exports = {
+  createReservation,
+  getMyReservations,
+  getAllReservations,
+  cancelReservation,
+  createPaymentIntent,
+  confirmGuestReservation,
+};
+
+// @desc    Create a payment intent for guest checkout
+// @route   POST /api/reservations/payment/intent
+// @access  Public
+async function createPaymentIntent(req, res) {
+  try {
+    const { eventId, selectedSeats, totalAmount, guestInfo } = req.body;
+
+    // Validate event exists
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // Validate guest info
+    if (!guestInfo?.fullName || !guestInfo?.email) {
+      return res.status(400).json({ message: "Guest information is required" });
+    }
+
+    // Validate seats
+    if (!selectedSeats || selectedSeats.length === 0) {
+      return res.status(400).json({ message: "No seats selected" });
+    }
+
+    // Get Stripe client
+    const stripe = getStripeClient();
+
+    // Create Stripe payment intent
+    // Note: Stripe does not support TND, so we charge in USD with the same numeric value
+    // Example: 16 TND displayed to user = 16 USD charged to Stripe
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(totalAmount * 100), // Convert to cents (e.g., 16 USD = 1600 cents)
+      currency: "usd", // Stripe uses USD; frontend displays prices in TND
+      description: `CineEvent reservation for ${event.title || "event"}`,
+      metadata: {
+        eventId: eventId.toString(),
+        guestEmail: guestInfo.email,
+        guestName: guestInfo.fullName,
+        selectedSeats: JSON.stringify(selectedSeats),
+        originalCurrency: "TND", // Track original currency in metadata
+      },
+    });
+
+    res.status(200).json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+    });
+  } catch (error) {
+    console.error("Payment intent error:", error);
+    res
+      .status(500)
+      .json({ message: error.message || "Failed to create payment intent" });
+  }
+}
+
+// @desc    Confirm guest reservation after successful payment
+// @route   POST /api/reservations/guest/confirm
+// @access  Public
+async function confirmGuestReservation(req, res) {
+  try {
+    const {
+      eventId,
+      selectedSeats,
+      totalPrice,
+      paidAmount,
+      bookingFee,
+      guestInfo,
+      stripePaymentIntentId,
+      paymentDetails,
+    } = req.body;
+
+    // Validate required fields
+    if (
+      !eventId ||
+      !selectedSeats ||
+      !guestInfo?.email ||
+      !stripePaymentIntentId
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Missing required reservation information" });
+    }
+
+    // Get Stripe client
+    const stripe = getStripeClient();
+
+    // Verify payment intent exists and is successful
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+      stripePaymentIntentId,
+    );
+    if (!paymentIntent) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    if (paymentIntent.status !== "succeeded") {
+      return res.status(400).json({ message: "Payment was not successful" });
+    }
+
+    // Get event
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // Check seat availability
+    if (event.availableSeats < selectedSeats.length) {
+      return res.status(400).json({ message: "Not enough available seats" });
+    }
+
+    // Create reservation
+    const reservation = await Reservation.create({
+      event: eventId,
+      selectedSeats,
+      totalPrice,
+      paidAmount: paidAmount || totalPrice + bookingFee, // Total amount paid including booking fee
+      bookingFee,
+      guestInfo: {
+        fullName: guestInfo.fullName,
+        email: guestInfo.email,
+        phoneNumber: guestInfo.phoneNumber || "",
+      },
+      stripePaymentIntentId,
+      paymentDetails,
+      paymentStatus: "paid",
+      status: "confirmed",
+    });
+
+    // Update event available seats
+    event.availableSeats -= selectedSeats.length;
+    await event.save();
+
+    // Send confirmation email to guest
+    const eventTitle =
+      event.eventType === "movie"
+        ? event.movieDetails.title
+        : event.festivalDetails.festivalName;
+
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const bookingLink = `${frontendUrl}/booking/${reservation._id}`;
+
+    try {
+      await sendTicketEmail({
+        to: reservation.guestInfo.email,
+        guestName: reservation.guestInfo.fullName,
+        eventTitle: eventTitle,
+        eventDate: event.date,
+        bookingReference: reservation.bookingReference,
+        selectedSeats: reservation.selectedSeats,
+        totalAmount: reservation.paidAmount,
+        bookingLink: bookingLink,
+      });
+    } catch (emailError) {
+      console.error("Failed to send ticket email:", emailError);
+      // Continue with response even if email fails
+    }
+
+    res.status(201).json({
+      message: "Reservation confirmed",
+      reservation: {
+        id: reservation._id,
+        bookingReference: reservation.bookingReference,
+        email: reservation.guestInfo.email,
+        totalPrice: reservation.totalPrice,
+        paidAmount: reservation.paidAmount,
+        bookingFee: reservation.bookingFee,
+        selectedSeats: reservation.selectedSeats,
+      },
+    });
+  } catch (error) {
+    console.error("Reservation confirmation error:", error);
+    res
+      .status(500)
+      .json({ message: error.message || "Failed to confirm reservation" });
+  }
+}

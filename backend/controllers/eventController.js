@@ -185,7 +185,28 @@ const getEventById = async (req, res) => {
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
     }
-    res.json(event);
+
+    // Get all reserved seats for this event
+    const Reservation = require("../models/Reservation");
+    const reservations = await Reservation.find({
+      event: req.params.id,
+      status: "confirmed",
+      paymentStatus: "paid",
+    });
+
+    // Extract reserved seats from confirmed paid reservations
+    const reservedSeats = [];
+    reservations.forEach((res) => {
+      if (res.selectedSeats && Array.isArray(res.selectedSeats)) {
+        reservedSeats.push(...res.selectedSeats);
+      }
+    });
+
+    // Add reserved seats to event response
+    const eventData = event.toObject();
+    eventData.reservedSeats = reservedSeats;
+
+    res.json(eventData);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -7,6 +7,7 @@ import EventDetailsPage from "./pages/public-pages/EventDetailsPage";
 import EventsPage from "./pages/public-pages/EventsPage";
 import ForgotPasswordPage from "./pages/public-pages/ForgotPasswordPage";
 import GuestReservationPage from "./pages/public-pages/GuestReservationPage";
+import ReservationConfirmationPage from "./pages/public-pages/ReservationConfirmationPage";
 import HomePage from "./pages/public-pages/HomePage";
 import LoginPage from "./pages/public-pages/LoginPage";
 import NotFoundPage from "./pages/public-pages/NotFoundPage";
@@ -87,6 +88,10 @@ export default function App() {
       <Route
         path="/events/:eventId/reserve"
         element={<GuestReservationPage />}
+      />
+      <Route
+        path="/reservation-confirmation/:reservationId"
+        element={<ReservationConfirmationPage />}
       />
       <Route
         path="/organizer"

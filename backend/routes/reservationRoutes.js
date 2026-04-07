@@ -1,16 +1,23 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
 const {
   createReservation,
   getMyReservations,
   getAllReservations,
   cancelReservation,
-} = require('../controllers/reservationController');
-const { protect, adminOnly } = require('../middleware/authMiddleware');
+  createPaymentIntent,
+  confirmGuestReservation,
+} = require("../controllers/reservationController");
+const { protect, adminOnly } = require("../middleware/authMiddleware");
 
-router.post('/', protect, createReservation);
-router.get('/my', protect, getMyReservations);
-router.get('/', protect, adminOnly, getAllReservations);
-router.put('/:id/cancel', protect, cancelReservation);
+// Authenticated routes
+router.post("/", protect, createReservation);
+router.get("/my", protect, getMyReservations);
+router.get("/", protect, adminOnly, getAllReservations);
+router.put("/:id/cancel", protect, cancelReservation);
+
+// Guest reservation routes (public)
+router.post("/payment/intent", createPaymentIntent);
+router.post("/guest/confirm", confirmGuestReservation);
 
 module.exports = router;

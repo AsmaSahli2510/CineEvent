@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import { getEvents } from "../../api/eventApi";
+import { toggleWishlist, isEventInWishlist } from "../../api/wishlistApi";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -97,10 +99,65 @@ function FilterSection({ title, children }) {
 
 function MovieEventCard({ event }) {
   const navigate = useNavigate();
+  const { currentUser } = useSelector((state) => state.auth);
   const hasImage = Boolean(event.image);
+  const [isLiked, setIsLiked] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Check if event is in wishlist on mount
+  useEffect(() => {
+    if (currentUser && (event.id || event._id)) {
+      const eventId = event.id || event._id;
+      isEventInWishlist(eventId)
+        .then((res) => {
+          if (res.success) {
+            setIsLiked(res.isInWishlist);
+          }
+        })
+        .catch((err) => {
+          console.error("Error checking wishlist:", err);
+        });
+    }
+  }, [currentUser, event.id, event._id]);
 
   const handleViewDetails = () => {
     navigate(`/events/${event.id}`);
+  };
+
+  const handleWishlistClick = (e) => {
+    e.preventDefault?.();
+    e.stopPropagation?.();
+
+    const eventId = event.id || event._id;
+
+    if (!eventId) {
+      console.error("Event ID not found");
+      return;
+    }
+
+    if (!currentUser) {
+      navigate("/login");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      toggleWishlist(eventId)
+        .then((response) => {
+          if (response?.success) {
+            setIsLiked(response.added);
+          }
+        })
+        .catch((error) => {
+          console.error("Error toggling wishlist:", error);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    } catch (error) {
+      console.error("Error in handler:", error);
+      setLoading(false);
+    }
   };
 
   return (
@@ -129,10 +186,25 @@ function MovieEventCard({ event }) {
             {event.category}
           </span>
 
-          {/* JUST HEART (no circle) */}
-          <button className="text-white/80 transition-all duration-200 hover:scale-110 hover:text-white">
+          {/* HEART BUTTON */}
+          <button
+            type="button"
+            onClick={handleWishlistClick}
+            disabled={loading}
+            className={`transition-all duration-200 ${
+              isLiked
+                ? "text-red-500 scale-110"
+                : "text-white/80 hover:text-red-500 hover:scale-110"
+            }`}
+            title={
+              currentUser
+                ? isLiked
+                  ? "Remove from wishlist"
+                  : "Add to wishlist"
+                : "Login to add to wishlist"
+            }>
             <span className="material-symbols-outlined text-[22px]">
-              favorite
+              {isLiked ? "favorite" : "favorite_border"}
             </span>
           </button>
         </div>
