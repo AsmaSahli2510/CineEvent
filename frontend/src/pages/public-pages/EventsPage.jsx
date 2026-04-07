@@ -30,7 +30,10 @@ const transformEventData = (backendEvent) => {
 
   const priceNum = backendEvent.pricingDetails?.isFreeEvent
     ? 0
-    : backendEvent.pricingDetails?.singlePrice || backendEvent.price || 0;
+    : backendEvent.pricingDetails?.categories?.standard ||
+      backendEvent.pricingDetails?.singlePrice ||
+      backendEvent.price ||
+      0;
 
   const price =
     priceNum === 0

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import { getEventById } from "../../api/eventApi";
+import { toggleWishlist, isEventInWishlist } from "../../api/wishlistApi";
 import { useAuth } from "../../context/AuthContext";
 
 const API_BASE_URL =
@@ -83,7 +85,10 @@ const transformEventDetails = (backendEvent) => {
 
   const priceNum = backendEvent.pricingDetails?.isFreeEvent
     ? 0
-    : backendEvent.pricingDetails?.singlePrice || backendEvent.price || 0;
+    : backendEvent.pricingDetails?.categories?.standard ||
+      backendEvent.pricingDetails?.singlePrice ||
+      backendEvent.price ||
+      0;
 
   const fullPrice =
     priceNum === 0
@@ -113,7 +118,9 @@ const transformEventDetails = (backendEvent) => {
   const genreTags = splitToTags(rawGenre, ["Cinema"]);
 
   const rawCast =
-    backendEvent.movieDetails?.cast || backendEvent.festivalDetails?.guests || "";
+    backendEvent.movieDetails?.cast ||
+    backendEvent.festivalDetails?.guests ||
+    "";
 
   const castTags = splitToTags(rawCast, []);
 
@@ -139,8 +146,7 @@ const transformEventDetails = (backendEvent) => {
       backendEvent.festivalDetails?.description ||
       "Event details coming soon.",
     gallery: galleryWithDefaults,
-    cast:
-      rawCast || "Cast information coming soon",
+    cast: rawCast || "Cast information coming soon",
     castTags,
     director:
       backendEvent.movieDetails?.director ||
@@ -180,8 +186,7 @@ const BookSeatsButton = ({ eventId }) => {
   return (
     <button
       onClick={handleBookSeats}
-      className="inline-flex items-center gap-3 rounded-full bg-white px-5 py-3 text-xs font-bold uppercase tracking-wide text-black shadow-2xl transition hover:scale-[1.02]"
-    >
+      className="inline-flex items-center gap-3 rounded-full bg-white px-5 py-3 text-xs font-bold uppercase tracking-wide text-black shadow-2xl transition hover:scale-[1.02]">
       <span className="material-symbols-outlined">confirmation_number</span>
       Book seats
     </button>
@@ -193,8 +198,7 @@ const TagList = ({ items }) => (
     {items.map((item) => (
       <span
         key={item}
-        className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/85 backdrop-blur"
-      >
+        className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-xs font-medium text-white/85 backdrop-blur">
         {item}
       </span>
     ))}
@@ -203,12 +207,16 @@ const TagList = ({ items }) => (
 
 export default function EventDetailsPage() {
   const { eventId } = useParams();
+  const navigate = useNavigate();
+  const { currentUser } = useSelector((state) => state.auth);
 
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [videoError, setVideoError] = useState("");
+  const [isLiked, setIsLiked] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -232,6 +240,57 @@ export default function EventDetailsPage() {
       fetchEvent();
     }
   }, [eventId]);
+
+  // Check if event is in wishlist
+  useEffect(() => {
+    if (currentUser && event?.id) {
+      console.log("🔍 Checking wishlist status for event:", event.id);
+      isEventInWishlist(event.id)
+        .then((res) => {
+          console.log("✅ Wishlist check response:", res);
+          if (res.success) {
+            setIsLiked(res.isInWishlist);
+          }
+        })
+        .catch((err) => {
+          console.error("❌ Error checking wishlist:", err);
+        });
+    }
+  }, [currentUser, event?.id]);
+
+  const handleWishlistClick = async () => {
+    if (!event?.id) {
+      console.error("❌ Event ID not found");
+      return;
+    }
+
+    // Check if user is logged in
+    if (!currentUser) {
+      console.log("🔐 User not logged in, redirecting to login");
+      navigate("/login");
+      return;
+    }
+
+    setWishlistLoading(true);
+    try {
+      console.log("🔄 Toggling wishlist for event:", event.id);
+      const response = await toggleWishlist(event.id);
+      console.log("✅ Wishlist response:", response);
+      if (response.success) {
+        setIsLiked(response.added);
+        console.log(
+          "💚 Wishlist updated:",
+          response.added ? "Added" : "Removed",
+        );
+      } else {
+        console.error("❌ Response not successful:", response);
+      }
+    } catch (error) {
+      console.error("❌ Error toggling wishlist:", error);
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
 
   const youtubeId = useMemo(
     () => extractYouTubeId(event?.teaserUrl),
@@ -272,8 +331,7 @@ export default function EventDetailsPage() {
           </p>
           <Link
             to="/events"
-            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black transition hover:scale-[1.02]"
-          >
+            className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 font-bold text-black transition hover:scale-[1.02]">
             <span className="material-symbols-outlined text-[20px]">
               arrow_back
             </span>
@@ -338,15 +396,30 @@ export default function EventDetailsPage() {
                     setShowVideoModal(true);
                     setVideoError("");
                   }}
-                  className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-xs font-bold uppercase tracking-wide text-white backdrop-blur-xl transition hover:scale-[1.02] hover:bg-white/15"
-                >
+                  className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-xs font-bold uppercase tracking-wide text-white backdrop-blur-xl transition hover:scale-[1.02] hover:bg-white/15">
                   <span className="material-symbols-outlined">play_circle</span>
                   Watch teaser
                 </button>
               )}
 
-              <button className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-transparent px-5 py-3 text-xs font-bold uppercase tracking-wide text-white/85 transition hover:border-white/20 hover:bg-white/5">
-                <span className="material-symbols-outlined">favorite</span>
+              <button
+                onClick={handleWishlistClick}
+                disabled={wishlistLoading}
+                className={`inline-flex items-center gap-3 rounded-full px-5 py-3 text-xs font-bold uppercase tracking-wide transition ${
+                  isLiked
+                    ? "border border-red-500 bg-red-500/20 text-red-500 hover:bg-red-500/30"
+                    : "border border-white/10 bg-transparent text-white/85 hover:border-red-500 hover:text-red-500"
+                }`}
+                title={
+                  currentUser
+                    ? isLiked
+                      ? "Remove from wishlist"
+                      : "Add to wishlist"
+                    : "Login to add to wishlist"
+                }>
+                <span className="material-symbols-outlined">
+                  {isLiked ? "favorite" : "favorite"}
+                </span>
                 Wishlist
               </button>
             </div>
@@ -432,8 +505,7 @@ export default function EventDetailsPage() {
                         setVideoError("");
                       }}
                       className="absolute bottom-4 right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-xl transition hover:scale-105"
-                      aria-label="Play teaser"
-                    >
+                      aria-label="Play teaser">
                       <span className="material-symbols-outlined text-[26px]">
                         play_arrow
                       </span>
@@ -501,8 +573,7 @@ export default function EventDetailsPage() {
                   {event.gallery.map((img, index) => (
                     <div
                       key={`${event.id}-${index}`}
-                      className="group relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black"
-                    >
+                      className="group relative aspect-video overflow-hidden rounded-xl border border-white/10 bg-black">
                       <img
                         src={img}
                         alt={`${event.title}-${index}`}

@@ -88,23 +88,19 @@ function getPriceRows(event) {
     return [{ label: "Free Admission", value: "Free" }];
   }
 
-  if (details?.pricingMode === "byCategory") {
-    return [
-      {
-        label: "Standard Admission",
-        value: `${Number(details?.categories?.normal || 0).toFixed(3)} TND`,
-      },
-      {
-        label: "Student",
-        value: `${Number(details?.categories?.student || 0).toFixed(3)} TND`,
-      },
-      {
-        label: "Senior",
-        value: `${Number(details?.categories?.senior || 0).toFixed(3)} TND`,
-      },
-    ];
+  // Handle dynamic zone-based pricing (any seat categories from venue)
+  if (details?.categories && typeof details.categories === "object") {
+    const categoryKeys = Object.keys(details.categories);
+
+    if (categoryKeys.length > 0) {
+      return categoryKeys.map((zoneId) => ({
+        label: zoneId.charAt(0).toUpperCase() + zoneId.slice(1),
+        value: `${Number(details.categories[zoneId] || 0).toFixed(3)} TND`,
+      }));
+    }
   }
 
+  // Fallback to single price
   return [
     {
       label: "Standard Admission",

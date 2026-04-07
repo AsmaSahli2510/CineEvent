@@ -134,6 +134,7 @@ const INITIAL_FORM_STATE = {
   normalPrice: "",
   studentPrice: "",
   seniorPrice: "",
+  zonesPrices: {},
   isCharityEvent: false,
   charityAssociation: "",
   minimumDonationSuggestion: "",
@@ -189,15 +190,46 @@ export default function CreateEventPage() {
     [venues, form.venueTemplateId],
   );
 
+  const getVenueZones = () => {
+    if (!selectedVenue || !Array.isArray(selectedVenue.zones)) {
+      return [];
+    }
+    return selectedVenue.zones.map(([zoneId]) => zoneId).sort();
+  };
+
   const baseTicketPrice = useMemo(() => {
     if (form.isFreeEvent) {
       return 0;
     }
 
+    const venueZones = getVenueZones();
+
+    // If there are zones (dynamic pricing), use standard price if available
+    if (venueZones.length > 0) {
+      // Prefer standard price for spectator preview
+      const standardPrice =
+        parsePositivePrice(form.zonesPrices["standard"]) || 0;
+      if (standardPrice > 0) {
+        return standardPrice;
+      }
+
+      // Fallback to first available zone price
+      for (const zoneId of venueZones) {
+        const price = parsePositivePrice(form.zonesPrices[zoneId]) || 0;
+        if (price > 0) {
+          return price;
+        }
+      }
+
+      return 0;
+    }
+
+    // Otherwise use single price
     if (form.pricingMode === "unique") {
       return parsePositivePrice(form.singlePrice) || 0;
     }
 
+    // Fallback to legacy category pricing
     const candidates = [form.normalPrice, form.studentPrice, form.seniorPrice]
       .map((price) => parsePositivePrice(price) || 0)
       .filter((price) => price > 0);
@@ -214,6 +246,8 @@ export default function CreateEventPage() {
     form.normalPrice,
     form.studentPrice,
     form.seniorPrice,
+    form.zonesPrices,
+    selectedVenue,
   ]);
 
   const serviceFee = useMemo(() => {
@@ -354,6 +388,23 @@ export default function CreateEventPage() {
     const { name, value } = event.target;
     if (value === "" || /^\d*(\.\d{0,3})?$/.test(value)) {
       setField(name, value);
+    }
+  };
+
+  const handleZonePriceInput = (zoneId, value) => {
+    if (value === "" || /^\d*(\.\d{0,3})?$/.test(value)) {
+      setForm((previous) => {
+        const newZonesPrices = { ...previous.zonesPrices, [zoneId]: value };
+        if (value === "") {
+          delete newZonesPrices[zoneId];
+        }
+        return {
+          ...previous,
+          zonesPrices: newZonesPrices,
+        };
+      });
+      setError("");
+      setSuccess("");
     }
   };
 
@@ -530,26 +581,23 @@ export default function CreateEventPage() {
 
   const validateStep4 = () => {
     if (!form.isFreeEvent) {
-      if (form.pricingMode === "unique") {
-        const singlePriceError = validatePriceField("unique", form.singlePrice);
+      const venueZones = getVenueZones();
+
+      // If no zones, validate single price
+      if (venueZones.length === 0) {
+        const singlePriceError = validatePriceField("Single", form.singlePrice);
         if (singlePriceError) {
           return singlePriceError;
         }
       } else {
-        const normalPriceError = validatePriceField("normal", form.normalPrice);
-        if (normalPriceError) {
-          return normalPriceError;
-        }
-        const studentPriceError = validatePriceField(
-          "student",
-          form.studentPrice,
-        );
-        if (studentPriceError) {
-          return studentPriceError;
-        }
-        const seniorPriceError = validatePriceField("senior", form.seniorPrice);
-        if (seniorPriceError) {
-          return seniorPriceError;
+        // Validate prices for each zone
+        for (const zoneId of venueZones) {
+          const zonePrice = form.zonesPrices[zoneId];
+          const zoneLabel = zoneId.charAt(0).toUpperCase() + zoneId.slice(1);
+          const error = validatePriceField(zoneLabel, zonePrice);
+          if (error) {
+            return error;
+          }
         }
       }
     }
@@ -698,14 +746,24 @@ export default function CreateEventPage() {
         isFreeEvent: form.isFreeEvent,
         pricingMode: form.pricingMode,
         singlePrice: form.isFreeEvent ? 0 : Number(form.singlePrice || 0),
-        categories:
-          form.pricingMode === "byCategory"
-            ? {
-                normal: Number(form.normalPrice || 0),
-                student: Number(form.studentPrice || 0),
-                senior: Number(form.seniorPrice || 0),
-              }
-            : null,
+        categories: (() => {
+          if (form.isFreeEvent) {
+            return null;
+          }
+
+          const venueZones = getVenueZones();
+          if (venueZones.length === 0) {
+            // No zones: use singlePrice
+            return null;
+          }
+
+          // Has zones: build categories from zone prices
+          const zoneCategories = {};
+          venueZones.forEach((zoneId) => {
+            zoneCategories[zoneId] = Number(form.zonesPrices[zoneId] || 0);
+          });
+          return zoneCategories;
+        })(),
         serviceFeeRate: SERVICE_FEE_RATE,
         serviceFee,
         spectatorTotal,
@@ -1197,8 +1255,20 @@ export default function CreateEventPage() {
                               : "border-white/10 bg-white/5 text-white/85 hover:bg-white/10"
                           }`}
                           onClick={() => {
-                            setField("venueTemplateId", venue.id);
-                            setField("venueType", venue.type);
+                            const newZonesPrices = {};
+                            if (Array.isArray(venue.zones)) {
+                              venue.zones.forEach(([zoneId]) => {
+                                newZonesPrices[zoneId] = "";
+                              });
+                            }
+                            setForm((previous) => ({
+                              ...previous,
+                              venueTemplateId: venue.id,
+                              venueType: venue.type,
+                              zonesPrices: newZonesPrices,
+                            }));
+                            setError("");
+                            setSuccess("");
                           }}
                           type="button">
                           {isSelected ? "Selected" : "Select"}
@@ -1294,6 +1364,14 @@ export default function CreateEventPage() {
                 name="isFreeEvent"
                 onChange={(event) => {
                   const checked = event.target.checked;
+                  const venueZones = getVenueZones();
+                  const clearedZonesPrices = {};
+                  if (!checked && venueZones.length > 0) {
+                    // Restore empty zone prices when unchecking free event
+                    venueZones.forEach((zoneId) => {
+                      clearedZonesPrices[zoneId] = "";
+                    });
+                  }
                   setForm((previous) => ({
                     ...previous,
                     isFreeEvent: checked,
@@ -1301,6 +1379,12 @@ export default function CreateEventPage() {
                     normalPrice: checked ? "" : previous.normalPrice,
                     studentPrice: checked ? "" : previous.studentPrice,
                     seniorPrice: checked ? "" : previous.seniorPrice,
+                    zonesPrices:
+                      venueZones.length > 0
+                        ? checked
+                          ? {}
+                          : clearedZonesPrices
+                        : previous.zonesPrices,
                   }));
                 }}
                 type="checkbox"
@@ -1337,81 +1421,65 @@ export default function CreateEventPage() {
 
           {!form.isFreeEvent && (
             <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-2">
-                  <span className="text-sm font-semibold text-white/80">
-                    Pricing mode *
-                  </span>
-                  <select
-                    name="pricingMode"
-                    value={form.pricingMode}
-                    onChange={handleTextInput}
-                    className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent">
-                    <option value="unique">Single price</option>
-                    <option value="byCategory">Category pricing</option>
-                  </select>
-                </label>
-              </div>
+              {(() => {
+                const venueZones = getVenueZones();
 
-              {form.pricingMode === "unique" ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="space-y-2">
-                    <span className="text-sm font-semibold text-white/80">
-                      Single price (TND) *
-                    </span>
-                    <input
-                      name="singlePrice"
-                      value={form.singlePrice}
-                      onChange={handlePriceInput}
-                      className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-                      placeholder="25.500"
-                      type="text"
-                    />
-                  </label>
-                </div>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-3">
-                  <label className="space-y-2">
-                    <span className="text-sm font-semibold text-white/80">
-                      Normal (TND) *
-                    </span>
-                    <input
-                      name="normalPrice"
-                      value={form.normalPrice}
-                      onChange={handlePriceInput}
-                      className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-                      placeholder="30.000"
-                      type="text"
-                    />
-                  </label>
-                  <label className="space-y-2">
-                    <span className="text-sm font-semibold text-white/80">
-                      Student (TND) *
-                    </span>
-                    <input
-                      name="studentPrice"
-                      value={form.studentPrice}
-                      onChange={handlePriceInput}
-                      className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-                      placeholder="20.000"
-                      type="text"
-                    />
-                  </label>
-                  <label className="space-y-2">
-                    <span className="text-sm font-semibold text-white/80">
-                      Senior (TND) *
-                    </span>
-                    <input
-                      name="seniorPrice"
-                      value={form.seniorPrice}
-                      onChange={handlePriceInput}
-                      className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
-                      placeholder="18.500"
-                      type="text"
-                    />
-                  </label>
-                </div>
-              )}
+                if (venueZones.length === 0) {
+                  // No zones: show single price field
+                  return (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="text-sm font-semibold text-white/80">
+                          Single price (TND) *
+                        </span>
+                        <input
+                          name="singlePrice"
+                          value={form.singlePrice}
+                          onChange={handlePriceInput}
+                          className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                          placeholder="25.500"
+                          type="text"
+                        />
+                      </label>
+                    </div>
+                  );
+                }
+
+                // Has zones: show price field for each zone
+                return (
+                  <div>
+                    <div className="mb-3">
+                      <p className="text-xs uppercase tracking-wider text-white/50">
+                        Prices by seat category from venue
+                      </p>
+                    </div>
+                    <div
+                      className={`grid gap-4 ${
+                        venueZones.length <= 2
+                          ? "md:grid-cols-2"
+                          : "md:grid-cols-3"
+                      }`}>
+                      {venueZones.map((zoneId) => (
+                        <label key={zoneId} className="space-y-2">
+                          <span className="text-sm font-semibold text-white/80">
+                            {zoneId.charAt(0).toUpperCase() + zoneId.slice(1)}{" "}
+                            (TND) *
+                          </span>
+                          <input
+                            value={form.zonesPrices[zoneId] || ""}
+                            onChange={(e) =>
+                              handleZonePriceInput(zoneId, e.target.value)
+                            }
+                            className="h-12 w-full rounded-xl border border-white/10 bg-background-dark px-4 text-sm text-white outline-none transition focus:border-accent"
+                            placeholder="25.000"
+                            type="text"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           )}
 
@@ -1674,54 +1742,419 @@ export default function CreateEventPage() {
               </ul>
             </article>
 
-            <article className="rounded-lg border border-accent/30 bg-gradient-to-br from-accent/10 to-background-dark/50 p-2.5">
-              <p className="mb-1.5 text-[10px] uppercase tracking-[0.15em] text-accent/70 font-bold">
-                Event card
+            <article className="overflow-hidden rounded-2xl border border-accent/30">
+              <p className="px-5 pt-5 text-[10px] uppercase tracking-[0.15em] text-accent/70 font-bold">
+                Event Preview
               </p>
-              <div className="flex flex-col gap-0.5 text-[10px] text-white/70">
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs text-accent">
-                    location_on
-                  </span>
-                  <span className="text-white/50 min-w-fit">Venue:</span>
-                  <span className="font-semibold truncate">
-                    {selectedVenue?.name || "-"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs text-accent">
-                    event
-                  </span>
-                  <span className="text-white/50 min-w-fit">Date:</span>
-                  <span className="font-semibold truncate">
-                    {form.eventType === "movie"
-                      ? form.screeningDate && form.screeningTime
-                        ? `${form.screeningDate}`
-                        : "-"
-                      : form.festivalStartDate && form.festivalEndDate
-                        ? `${form.festivalStartDate}`
-                        : "-"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs text-accent">
-                    schedule
-                  </span>
-                  <span className="text-white/50 min-w-fit">Time:</span>
-                  <span className="font-semibold truncate">
-                    {form.eventType === "movie"
-                      ? form.screeningTime || "-"
-                      : "N/A"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs text-primary">
-                    payments
-                  </span>
-                  <span className="text-white/50 min-w-fit">Price:</span>
-                  <span className="font-bold text-primary text-[11px]">
-                    {asTnd(spectatorTotal)}
-                  </span>
+
+              {/* Card Container */}
+              <div className="bg-gradient-to-br from-white/5 to-background-dark/30 p-4 m-5 rounded-xl border border-white/10 shadow-lg overflow-hidden max-h-[600px] overflow-y-auto">
+                <div className="group relative overflow-hidden space-y-4">
+                  {/* Poster Image Section */}
+                  <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-background-dark border border-white/10">
+                    {form.eventType === "movie" && form.posterPreviewUrl ? (
+                      <img
+                        src={form.posterPreviewUrl}
+                        alt="Event poster preview"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : form.eventType === "festival" &&
+                      form.festivalPosterPreviewUrl ? (
+                      <img
+                        src={form.festivalPosterPreviewUrl}
+                        alt="Event poster preview"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/20 via-background-dark to-accent/15 px-4 text-center">
+                        <div className="space-y-2">
+                          <span className="material-symbols-outlined text-3xl block text-white/40">
+                            image_not_supported
+                          </span>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-white/40">
+                            Poster preview
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Gradient Overlay */}
+                    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(6,8,12,0.8)_0%,rgba(6,8,12,0.3)_40%,transparent_70%)]" />
+
+                    {/* Top Badge */}
+                    <div className="absolute left-3 right-3 top-3 z-10 flex items-start justify-between gap-2 flex-wrap">
+                      {form.isCharityEvent && (
+                        <span className="border border-success/40 bg-success/20 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-success backdrop-blur-sm rounded-sm">
+                          Charity Event
+                        </span>
+                      )}
+                      <span className="border border-white/15 bg-black/35 px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.25em] text-white/80 backdrop-blur-sm rounded-sm">
+                        {form.eventType === "movie" ? "Movie" : "Festival"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Content Section */}
+                  <div className="space-y-3">
+                    {/* Title & Genre */}
+                    <div>
+                      <h3 className="line-clamp-2 text-sm font-black uppercase leading-tight tracking-wide text-white">
+                        {form.eventType === "movie"
+                          ? form.movieTitle || "Untitled Movie"
+                          : form.festivalName || "Untitled Festival"}
+                      </h3>
+                      {form.eventType === "movie" && form.genre && (
+                        <p className="mt-1 text-xs text-accent font-semibold uppercase tracking-wider">
+                          {form.genre}
+                        </p>
+                      )}
+                      {form.eventType === "festival" &&
+                        form.festivalCategory && (
+                          <p className="mt-1 text-xs text-accent font-semibold uppercase tracking-wider">
+                            {form.festivalCategory}
+                          </p>
+                        )}
+                    </div>
+
+                    {/* Movie-Specific Details */}
+                    {form.eventType === "movie" && (
+                      <div className="space-y-2 pt-2 border-t border-white/10">
+                        {form.director && (
+                          <div className="flex items-start gap-2 text-[10px]">
+                            <span className="material-symbols-outlined text-xs text-accent flex-shrink-0 mt-0.5">
+                              person
+                            </span>
+                            <div className="flex-1">
+                              <span className="text-white/60 block">
+                                Director:
+                              </span>
+                              <span className="font-semibold text-white">
+                                {form.director}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {form.durationMinutes && (
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <span className="material-symbols-outlined text-xs text-accent flex-shrink-0">
+                              schedule
+                            </span>
+                            <span className="text-white/60">Duration:</span>
+                            <span className="font-semibold text-white">
+                              {form.durationMinutes} min
+                            </span>
+                          </div>
+                        )}
+
+                        {form.synopsis && (
+                          <div className="pt-2 border-t border-white/10">
+                            <p className="text-[10px] text-white/60 mb-1">
+                              Synopsis:
+                            </p>
+                            <p className="text-[9px] text-white/75 line-clamp-3 leading-relaxed">
+                              {form.synopsis}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Festival-Specific Details */}
+                    {form.eventType === "festival" &&
+                      form.festivalDescription && (
+                        <div className="pt-2 border-t border-white/10">
+                          <p className="text-[10px] text-white/60 mb-1">
+                            Description:
+                          </p>
+                          <p className="text-[9px] text-white/75 line-clamp-2 leading-relaxed">
+                            {form.festivalDescription}
+                          </p>
+                        </div>
+                      )}
+
+                    {/* Screening Details */}
+                    <div className="space-y-2 pt-3 border-t border-white/10">
+                      {/* Venue */}
+                      <div className="flex items-center gap-2 text-[10px]">
+                        <span className="material-symbols-outlined text-xs text-accent flex-shrink-0">
+                          location_on
+                        </span>
+                        <span className="text-white/60 flex-shrink-0">
+                          Venue:
+                        </span>
+                        <span className="font-semibold text-white truncate">
+                          {selectedVenue?.name || "Not selected"}
+                        </span>
+                      </div>
+
+                      {/* Date & Time */}
+                      {form.eventType === "movie" ? (
+                        <>
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <span className="material-symbols-outlined text-xs text-accent flex-shrink-0">
+                              event
+                            </span>
+                            <span className="text-white/60 flex-shrink-0">
+                              Date:
+                            </span>
+                            <span className="font-semibold text-white">
+                              {form.screeningDate || "Pending..."}
+                            </span>
+                          </div>
+                          {form.screeningTime && (
+                            <div className="flex items-center gap-2 text-[10px]">
+                              <span className="material-symbols-outlined text-xs text-accent flex-shrink-0">
+                                access_time
+                              </span>
+                              <span className="text-white/60 flex-shrink-0">
+                                Time:
+                              </span>
+                              <span className="font-semibold text-white">
+                                {form.screeningTime}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {form.festivalStartDate && (
+                            <div className="flex items-center gap-2 text-[10px]">
+                              <span className="material-symbols-outlined text-xs text-accent flex-shrink-0">
+                                event
+                              </span>
+                              <span className="text-white/60 flex-shrink-0">
+                                From:
+                              </span>
+                              <span className="font-semibold text-white">
+                                {form.festivalStartDate}
+                              </span>
+                            </div>
+                          )}
+                          {form.festivalEndDate && (
+                            <div className="flex items-center gap-2 text-[10px]">
+                              <span className="material-symbols-outlined text-xs text-accent flex-shrink-0">
+                                event
+                              </span>
+                              <span className="text-white/60 flex-shrink-0">
+                                To:
+                              </span>
+                              <span className="font-semibold text-white">
+                                {form.festivalEndDate}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Pricing Details */}
+                    <div className="space-y-2 pt-3 border-t border-white/10">
+                      <div className="flex items-center gap-2 text-[10px]">
+                        <span className="material-symbols-outlined text-xs text-primary flex-shrink-0">
+                          payments
+                        </span>
+                        {form.isFreeEvent ? (
+                          <>
+                            <span className="text-white/60">Free Event</span>
+                            <span className="font-black text-success">
+                              No Cost
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-white/60 flex-shrink-0">
+                              Total:
+                            </span>
+                            <span className="font-black text-primary">
+                              {asTnd(spectatorTotal)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      {!form.isFreeEvent &&
+                        (() => {
+                          const venueZones = getVenueZones();
+
+                          if (venueZones.length > 0) {
+                            // Show zone prices
+                            return (
+                              <div className="space-y-1.5 text-[9px]">
+                                {venueZones.map((zoneId) => {
+                                  const price = parsePositivePrice(
+                                    form.zonesPrices[zoneId],
+                                  );
+                                  if (!price || price <= 0) return null;
+
+                                  return (
+                                    <div
+                                      key={zoneId}
+                                      className="flex items-center gap-2 px-2 py-1 rounded bg-white/5">
+                                      <span className="text-white/60 flex-shrink-0">
+                                        {zoneId.charAt(0).toUpperCase() +
+                                          zoneId.slice(1)}
+                                        :
+                                      </span>
+                                      <span className="font-semibold text-primary">
+                                        {asTnd(price)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          }
+
+                          // Show legacy category prices
+                          if (form.pricingMode === "byCategory") {
+                            return (
+                              <div className="space-y-1.5 text-[9px]">
+                                {parsePositivePrice(form.normalPrice) > 0 && (
+                                  <div className="flex items-center gap-2 px-2 py-1 rounded bg-white/5">
+                                    <span className="text-white/60 flex-shrink-0">
+                                      Normal:
+                                    </span>
+                                    <span className="font-semibold text-primary">
+                                      {asTnd(
+                                        parsePositivePrice(form.normalPrice),
+                                      )}
+                                    </span>
+                                  </div>
+                                )}
+                                {parsePositivePrice(form.studentPrice) > 0 && (
+                                  <div className="flex items-center gap-2 px-2 py-1 rounded bg-white/5">
+                                    <span className="text-white/60 flex-shrink-0">
+                                      Student:
+                                    </span>
+                                    <span className="font-semibold text-primary">
+                                      {asTnd(
+                                        parsePositivePrice(form.studentPrice),
+                                      )}
+                                    </span>
+                                  </div>
+                                )}
+                                {parsePositivePrice(form.seniorPrice) > 0 && (
+                                  <div className="flex items-center gap-2 px-2 py-1 rounded bg-white/5">
+                                    <span className="text-white/60 flex-shrink-0">
+                                      Senior:
+                                    </span>
+                                    <span className="font-semibold text-primary">
+                                      {asTnd(
+                                        parsePositivePrice(form.seniorPrice),
+                                      )}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          return null;
+                        })()}
+
+                      {!form.isFreeEvent && (
+                        <>
+                          <div className="text-[9px] flex justify-between px-2 py-1 rounded bg-black/20">
+                            <span className="text-white/60">Service Fee:</span>
+                            <span className="font-semibold text-accent">
+                              {asTnd(serviceFee)}
+                            </span>
+                          </div>
+                          <div className="text-[9px] flex justify-between px-2 py-1 rounded bg-accent/10 border border-accent/20">
+                            <span className="text-white/80 font-bold">
+                              Spectator Total:
+                            </span>
+                            <span className="font-black text-primary">
+                              {asTnd(spectatorTotal)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Charity Info */}
+                    {form.isCharityEvent && (
+                      <div className="space-y-2 pt-3 border-t border-success/20 bg-success/5 rounded-lg p-2.5">
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <span className="material-symbols-outlined text-xs text-success flex-shrink-0">
+                            favorite
+                          </span>
+                          <span className="text-success/80 flex-shrink-0">
+                            Beneficiary:
+                          </span>
+                          <span className="font-semibold text-success truncate">
+                            {form.charityAssociation || "Not selected"}
+                          </span>
+                        </div>
+                        {form.minimumDonationSuggestion && (
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <span className="material-symbols-outlined text-xs text-success flex-shrink-0">
+                              monetization_on
+                            </span>
+                            <span className="text-success/80 flex-shrink-0">
+                              Min Donation:
+                            </span>
+                            <span className="font-semibold text-success">
+                              {asTnd(Number(form.minimumDonationSuggestion))}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Media Preview */}
+                    {(form.galleryPreviewUrls.length > 0 || form.teaserUrl) && (
+                      <div className="space-y-2 pt-3 border-t border-white/10">
+                        <p className="text-[10px] font-bold text-white/80 uppercase tracking-wider">
+                          Media
+                        </p>
+
+                        {form.teaserUrl && (
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <span className="material-symbols-outlined text-xs text-primary flex-shrink-0">
+                              play_circle
+                            </span>
+                            <span className="text-white/60 flex-shrink-0">
+                              Teaser:
+                            </span>
+                            <span className="font-semibold text-white truncate max-w-[150px]">
+                              {form.teaserUrl.substring(0, 30)}...
+                            </span>
+                          </div>
+                        )}
+
+                        {form.galleryPreviewUrls.length > 0 && (
+                          <div className="pt-2">
+                            <p className="text-[9px] text-white/60 mb-1.5">
+                              Gallery: {form.galleryPreviewUrls.length} image
+                              {form.galleryPreviewUrls.length !== 1 ? "s" : ""}
+                            </p>
+                            <div className="grid grid-cols-4 gap-1">
+                              {form.galleryPreviewUrls
+                                .slice(0, 4)
+                                .map((url, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="aspect-square rounded border border-white/10 overflow-hidden">
+                                    <img
+                                      src={url}
+                                      alt={`Gallery ${idx + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                ))}
+                              {form.galleryPreviewUrls.length > 4 && (
+                                <div className="aspect-square rounded border border-white/10 bg-black/30 flex items-center justify-center text-[8px] font-bold text-white/60">
+                                  +{form.galleryPreviewUrls.length - 4}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </article>

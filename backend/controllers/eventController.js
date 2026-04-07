@@ -19,16 +19,25 @@ const buildOrganizerEventDocument = (
   const movie = payload?.movie || {};
   const categories = pricing?.categories || {};
 
-  const categoryCandidates = [
-    parsePositiveNumber(categories.normal),
-    parsePositiveNumber(categories.student),
-    parsePositiveNumber(categories.senior),
-  ].filter((value) => value > 0);
+  // Dynamically extract category prices
+  const categoryPrices = {};
+  if (typeof categories === "object" && categories !== null) {
+    Object.entries(categories).forEach(([key, value]) => {
+      const parsed = parsePositiveNumber(value);
+      if (parsed > 0) {
+        categoryPrices[key] = parsed;
+      }
+    });
+  }
+
+  const categoryCandidates = Object.values(categoryPrices).filter(
+    (value) => value > 0,
+  );
 
   const basePrice = pricing?.isFreeEvent
     ? 0
-    : pricing?.pricingMode === "byCategory"
-      ? categoryCandidates[0] || 0
+    : categoryCandidates.length > 0
+      ? categoryCandidates[0]
       : parsePositiveNumber(pricing.singlePrice);
 
   const dateFromIso = projection?.dateTimeIso
@@ -104,11 +113,7 @@ const buildOrganizerEventDocument = (
       isFreeEvent: Boolean(pricing.isFreeEvent),
       pricingMode: String(pricing.pricingMode || "unique"),
       singlePrice: parsePositiveNumber(pricing.singlePrice),
-      categories: {
-        normal: parsePositiveNumber(categories.normal),
-        student: parsePositiveNumber(categories.student),
-        senior: parsePositiveNumber(categories.senior),
-      },
+      categories: categoryPrices,
       serviceFeeRate: Number(pricing.serviceFeeRate || 0),
       serviceFee: Number(pricing.serviceFee || 0),
       spectatorTotal: Number(pricing.spectatorTotal || 0),

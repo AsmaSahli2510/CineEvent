@@ -117,9 +117,9 @@ const eventSchema = new mongoose.Schema(
       pricingMode: { type: String, default: "unique" },
       singlePrice: { type: Number, default: 0 },
       categories: {
-        normal: { type: Number, default: 0 },
-        student: { type: Number, default: 0 },
-        senior: { type: Number, default: 0 },
+        type: Map,
+        of: Number,
+        default: {},
       },
       serviceFeeRate: { type: Number, default: 0 },
       serviceFee: { type: Number, default: 0 },

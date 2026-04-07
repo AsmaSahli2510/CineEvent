@@ -48,6 +48,7 @@ export default function GuestReservationPage() {
   const { currentUser } = useSelector((state) => state.auth);
   const [event, setEvent] = useState(null);
   const [venueTemplate, setVenueTemplate] = useState(null);
+  const [categoryPrices, setCategoryPrices] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedSeats, setSelectedSeats] = useState([]);
@@ -75,6 +76,10 @@ export default function GuestReservationPage() {
         setError("");
         const backendEvent = await getEventById(eventId);
 
+        // Extract category prices from pricing details
+        const categoryObj = backendEvent.pricingDetails?.categories || {};
+        setCategoryPrices(categoryObj);
+
         // Transform backend event data to match expected format
         const transformedEvent = {
           id: backendEvent._id,
@@ -83,7 +88,10 @@ export default function GuestReservationPage() {
             backendEvent.festivalDetails?.festivalName ||
             "Untitled Event",
           price:
-            backendEvent.pricingDetails?.singlePrice || backendEvent.price || 0,
+            backendEvent.pricingDetails?.categories?.standard ||
+            backendEvent.pricingDetails?.singlePrice ||
+            backendEvent.price ||
+            0,
           image:
             backendEvent.movieDetails?.posterUrl ||
             backendEvent.festivalDetails?.posterUrl ||
@@ -116,9 +124,33 @@ export default function GuestReservationPage() {
     }
   }, [eventId]);
 
+  const getSeatPrice = (seatType) => {
+    const categoryPriceMap = categoryPrices || {};
+    const price = categoryPriceMap[seatType] || event?.price || 0;
+    return parsePrice(price);
+  };
+
+  const calculateTicketSubtotal = () => {
+    if (selectedSeats.length === 0) return 0;
+
+    let subtotal = 0;
+    selectedSeats.forEach((seatId) => {
+      const row = venueTemplate?.rows?.find((r) =>
+        seatId.startsWith(r.id || r.label),
+      );
+      if (row) {
+        const seatNumber = parseInt(seatId.split("-")[1], 10);
+        const seatType = getSeatTypeFromRow(row, seatNumber);
+        subtotal += getSeatPrice(seatType);
+      }
+    });
+    return subtotal;
+  };
+
   const ticketCount = selectedSeats.length;
-  const ticketSubtotal = parsePrice(event?.price || 0) * ticketCount;
-  const bookingFee = ticketCount > 0 ? 12.5 : 0;
+  const ticketSubtotal = calculateTicketSubtotal();
+  const bookingFee =
+    ticketCount > 0 ? Number((ticketSubtotal * 0.075).toFixed(3)) : 0;
   const totalAmount = ticketSubtotal + bookingFee;
 
   const selectedSeatsDisplay =
@@ -201,15 +233,17 @@ export default function GuestReservationPage() {
       <main className="mx-auto max-w-[1440px] px-6 py-12 md:px-20">
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-12">
           <div className="space-y-10 lg:col-span-7">
-            <div>
-              <h2 className="mb-2 text-4xl font-black">
-                Quick Guest Reservation
-              </h2>
-              <p className="text-white/60">
-                No account needed. Secure your tickets for{" "}
-                <span className="text-accent">{event.title}</span> in seconds.
-              </p>
-            </div>
+            {!currentUser && (
+              <div>
+                <h2 className="mb-2 text-4xl font-black">
+                  Quick Guest Reservation
+                </h2>
+                <p className="text-white/60">
+                  No account needed. Secure your tickets for{" "}
+                  <span className="text-accent">{event.title}</span> in seconds.
+                </p>
+              </div>
+            )}
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur-md">
               <div className="mb-8 flex items-center justify-between">
@@ -318,7 +352,7 @@ export default function GuestReservationPage() {
                                         : SEAT_COLOR_CLASS[seatType] ||
                                           SEAT_COLOR_CLASS.standard
                                     }`}
-                                    title={`${row.label || String.fromCharCode(65 + rowIndex)}-${seatNumber}`}
+                                    title={`${row.label || String.fromCharCode(65 + rowIndex)}-${seatNumber} (${seatType.charAt(0).toUpperCase() + seatType.slice(1)}: ${getSeatPrice(seatType).toFixed(2)} TND)`}
                                   />
                                 );
                               },

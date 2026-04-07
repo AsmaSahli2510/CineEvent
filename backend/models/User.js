@@ -117,6 +117,12 @@ const userSchema = new mongoose.Schema(
       default: null,
       select: false,
     },
+    wishlist: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Event",
+      },
+    ],
   },
   { timestamps: true },
 );
