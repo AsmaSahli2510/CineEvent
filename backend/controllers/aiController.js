@@ -33,8 +33,8 @@ Output format:
   "rows": [
     {
       "label": "A",
-      "seats": 16,
-      "aisleEvery": 8,
+      "seats": 12,
+      "aisleEvery": 6,
       "zoneId": "standard",
       "wheelchair": 0,
       "seatOverrides": {
@@ -52,19 +52,11 @@ Output format:
 }
 
 Rules:
-- name must be a short venue/template name
-- subtitle must be a short venue description
-- screenLabel must be a short stage/screen label
-- ambience must be one of: dark, sky, festival
-- covered must be true or false
-- Generate exactly the number of rows requested by the user
+- Never invent more rows than requested
+- Never invent more seats per row than requested
 - Labels must increment A, B, C, D...
-- seats must be between 4 and 50
-- aisleEvery must be 0 or a positive number less than seats
 - zoneId must be one of: standard, premium, vip, accessible, bench
-- zoneId is the default type for the whole row
-- seatOverrides is only for individual seat exceptions
-- structures may include only these types:
+- structure type must be one of:
   entrance, exit, food, bar, shelter, restroom, lounge, projection, backstage
 - structure side must be one of:
   north, south, east, west, center
@@ -97,18 +89,22 @@ function safeParseJson(text) {
     trimmed.match(/```json\s*([\s\S]*?)```/i) ||
     trimmed.match(/```([\s\S]*?)```/);
 
-  if (codeBlockMatch) {
-    return JSON.parse(codeBlockMatch[1].trim());
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch (_) {}
   }
 
   const firstBrace = trimmed.indexOf("{");
   const lastBrace = trimmed.lastIndexOf("}");
 
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+    try {
+      return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+    } catch (_) {}
   }
 
-  throw new Error("Could not extract JSON");
+  throw new Error("Could not extract valid JSON from model response");
 }
 
 function validateSeatOverrides(raw, seats) {
@@ -120,9 +116,7 @@ function validateSeatOverrides(raw, seats) {
 
   for (const [key, value] of Object.entries(raw)) {
     const seatNumber = Number(key);
-    const seatType = String(value || "")
-      .toLowerCase()
-      .trim();
+    const seatType = String(value || "").toLowerCase().trim();
 
     if (
       Number.isInteger(seatNumber) &&
@@ -147,8 +141,8 @@ function validateRow(row, index) {
     : getLabelFromIndex(index);
 
   let seats = Number(row.seats);
-  if (!Number.isInteger(seats) || seats < 4 || seats > 50) {
-    seats = 16;
+  if (!Number.isInteger(seats) || seats < 4 || seats > 100) {
+    seats = 12;
   }
 
   let aisleEvery = Number(row.aisleEvery);
@@ -156,9 +150,7 @@ function validateRow(row, index) {
     aisleEvery = Math.floor(seats / 2);
   }
 
-  let zoneId = String(row.zoneId || "standard")
-    .toLowerCase()
-    .trim();
+  let zoneId = String(row.zoneId || "standard").toLowerCase().trim();
   if (!VALID_ZONE_IDS.includes(zoneId)) {
     zoneId = "standard";
   }
@@ -181,16 +173,20 @@ function validateRow(row, index) {
 }
 
 function normalizeStructureType(type) {
-  const t = String(type || "")
-    .toLowerCase()
-    .trim();
+  const t = String(type || "").toLowerCase().trim();
 
   if (VALID_STRUCTURE_TYPES.includes(t)) return t;
-  if (t === "projection booth") return "projection";
-  if (t === "booth") return "projection";
-  if (t === "bathroom" || t === "toilet" || t === "wc") return "restroom";
-  if (t === "food area" || t === "food truck") return "food";
-  if (t === "vip lounge") return "lounge";
+  if (t.includes("projection")) return "projection";
+  if (t.includes("restroom") || t.includes("toilet") || t.includes("wc")) {
+    return "restroom";
+  }
+  if (t === "food_area" || t.includes("food")) return "food";
+  if (t.includes("bar")) return "bar";
+  if (t.includes("lounge")) return "lounge";
+  if (t.includes("entrance")) return "entrance";
+  if (t.includes("exit")) return "exit";
+  if (t.includes("shelter")) return "shelter";
+  if (t.includes("backstage")) return "backstage";
 
   return "lounge";
 }
@@ -201,9 +197,7 @@ function validateStructure(structure, index) {
   }
 
   const safeType = normalizeStructureType(structure.type);
-  const side = String(structure.side || "center")
-    .toLowerCase()
-    .trim();
+  const side = String(structure.side || "center").toLowerCase().trim();
   const safeSide = VALID_STRUCTURE_SIDES.includes(side) ? side : "center";
 
   const name =
@@ -225,22 +219,49 @@ function extractRequestedRowCount(prompt) {
 
 function extractRequestedSeats(prompt) {
   const p = String(prompt || "").toLowerCase();
-  const match =
-    p.match(/each row has\s*(\d+)\s*seats?/) ||
-    p.match(/(\d+)\s*seats?\s*per row/);
-  return match ? Number(match[1]) : null;
+
+  const patterns = [
+    /each row has exactly\s*(\d+)\s*seats?/,
+    /each row has\s*(\d+)\s*seats?/,
+    /exactly\s*(\d+)\s*seats?\s*per row/,
+    /(\d+)\s*seats?\s*per row/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = p.match(pattern);
+    if (match) {
+      return Number(match[1]);
+    }
+  }
+
+  return null;
 }
 
-function extractBenchSeat(prompt) {
+function extractBenchSeats(prompt) {
   const p = String(prompt || "").toLowerCase();
+  const seats = new Set();
 
-  const match =
-    p.match(
-      /seat\s*(?:number\s*)?(\d+)\s*(?:in every row|in each row).*bench/,
-    ) ||
-    p.match(/(?:in every row|in each row).*seat\s*(?:number\s*)?(\d+).*bench/);
+  const patterns = [
+    /seat number ([\d,\sand]+) in every row.*bench/,
+    /seat number ([\d,\sand]+) in each row.*bench/,
+    /seats? ([\d,\sand]+) in every row.*bench/,
+    /seats? ([\d,\sand]+) in each row.*bench/,
+  ];
 
-  return match ? Number(match[1]) : null;
+  for (const pattern of patterns) {
+    const match = p.match(pattern);
+    if (match && match[1]) {
+      const numbers = match[1].match(/\d+/g) || [];
+      numbers.forEach((num) => {
+        const parsed = Number(num);
+        if (Number.isInteger(parsed)) {
+          seats.add(parsed);
+        }
+      });
+    }
+  }
+
+  return Array.from(seats).sort((a, b) => a - b);
 }
 
 function extractExclusivePmrRule(prompt) {
@@ -248,30 +269,44 @@ function extractExclusivePmrRule(prompt) {
 
   const patterns = [
     /only row\s*(\d+)\s*(?:may contain|has|must contain).*(\d+)\s*(?:pmr|accessible|wheelchair)/,
-    /only row\s*(\d+).*(\d+)\s*(?:pmr|accessible|wheelchair)/,
-    /only row\s*(\d+)\s*may contain pmr.*?(\d+)/,
+    /only row\s*(\d+)\s*may contain wheelchair seats/,
+    /only row\s*(\d+)\s*may contain pmr seats/,
     /row\s*(\d+)\s*must contain exactly\s*(\d+)\s*(?:pmr|accessible|wheelchair)/,
     /row\s*(\d+)\s*.*exactly\s*(\d+)\s*(?:pmr|accessible|wheelchair)/,
-    /only row\s*(\d+).*(?:wheelchair|pmr|accessible).*?(\d+)/,
     /exactly\s*(\d+)\s*(?:pmr|accessible|wheelchair).*?only row\s*(\d+)/,
-    /only row\s*(\d+)\s*may contain.*?exactly\s*(\d+)/,
   ];
+
+  let rowNumber = null;
+  let count = null;
 
   for (const pattern of patterns) {
     const match = p.match(pattern);
     if (!match) continue;
 
-    if (pattern.source.startsWith("exactly")) {
-      return {
-        rowNumber: Number(match[2]),
-        count: Number(match[1]),
-      };
+    if (
+      pattern.source.includes("only row") &&
+      match[1] &&
+      rowNumber === null
+    ) {
+      rowNumber = Number(match[1]);
     }
 
-    return {
-      rowNumber: Number(match[1]),
-      count: Number(match[2]),
-    };
+    if (match[2] && count === null) {
+      count = Number(match[2]);
+    }
+
+    if (
+      pattern.source.startsWith("exactly") &&
+      match[1] &&
+      match[2]
+    ) {
+      count = Number(match[1]);
+      rowNumber = Number(match[2]);
+    }
+  }
+
+  if (rowNumber !== null && count !== null) {
+    return { rowNumber, count };
   }
 
   return null;
@@ -281,11 +316,11 @@ function extractZoneRanges(prompt) {
   const p = String(prompt || "").toLowerCase();
   const ranges = [];
 
-  const regex =
+  const rangeRegex =
     /rows?\s+(\d+)\s*(?:to|-)\s*(\d+)\s+must\s+be\s+(vip|premium|standard)/g;
 
   let match;
-  while ((match = regex.exec(p)) !== null) {
+  while ((match = rangeRegex.exec(p)) !== null) {
     ranges.push({
       start: Number(match[1]),
       end: Number(match[2]),
@@ -309,11 +344,7 @@ function inferDefaultsFromPrompt(prompt) {
   const p = String(prompt || "").toLowerCase();
 
   let ambience = "dark";
-  if (
-    p.includes("open air") ||
-    p.includes("outdoor") ||
-    p.includes("open sky")
-  ) {
+  if (p.includes("open air") || p.includes("outdoor") || p.includes("open sky")) {
     ambience = "sky";
   } else if (p.includes("festival")) {
     ambience = "festival";
@@ -344,8 +375,7 @@ function buildDefaultName(prompt) {
   const p = String(prompt || "").toLowerCase();
 
   if (p.includes("festival")) return "Festival Arena";
-  if (p.includes("open air") || p.includes("outdoor"))
-    return "Open Air Theater";
+  if (p.includes("open air") || p.includes("outdoor")) return "Open Air Theater";
   if (p.includes("cinema")) return "Cinema Hall";
   if (p.includes("theater")) return "Theater Room";
 
@@ -363,20 +393,23 @@ function buildDefaultSubtitle(prompt) {
 }
 
 function applyPromptRules(rows, prompt) {
-  const requestedRowCount =
-    extractRequestedRowCount(prompt) || rows.length || 1;
-  const requestedSeats = extractRequestedSeats(prompt);
-  const benchSeat = extractBenchSeat(prompt);
-  const pmrRule = extractExclusivePmrRule(prompt);
+  const requestedRowCount = extractRequestedRowCount(prompt) || rows.length || 1;
+  const rowCount = Math.min(requestedRowCount, 100);
+  const seats = extractRequestedSeats(prompt) || 12;
+  const benchSeats = extractBenchSeats(prompt);
   const zoneRanges = extractZoneRanges(prompt);
+  let pmrRule = extractExclusivePmrRule(prompt);
+
+  if (pmrRule && pmrRule.rowNumber > rowCount) {
+    pmrRule = null;
+  }
 
   const result = [];
 
-  for (let i = 0; i < requestedRowCount; i += 1) {
+  for (let i = 0; i < rowCount; i += 1) {
     const existing = rows[i] || {};
-    const seats = requestedSeats || existing.seats || 16;
 
-    const cleanRow = {
+    const row = {
       label: getLabelFromIndex(i),
       seats,
       aisleEvery:
@@ -390,47 +423,44 @@ function applyPromptRules(rows, prompt) {
       seatOverrides: {},
     };
 
-    // keep only non-accessible overrides first
-    for (const [seatNumber, seatType] of Object.entries(
-      existing.seatOverrides || {},
-    )) {
-      if (seatType !== "accessible") {
-        cleanRow.seatOverrides[seatNumber] = seatType;
-      }
-    }
-
-    // apply exact zone ranges from prompt
-    const matchingZone = zoneRanges.find(
-      (range) => i + 1 >= range.start && i + 1 <= range.end,
+    const zoneMatch = zoneRanges.find(
+      (z) => i + 1 >= z.start && i + 1 <= z.end,
     );
 
-    if (matchingZone) {
-      cleanRow.zoneId = matchingZone.zoneId;
+    if (zoneMatch) {
+      row.zoneId = zoneMatch.zoneId;
     } else if (
       VALID_ZONE_IDS.includes(existing.zoneId) &&
       existing.zoneId !== "accessible" &&
       existing.zoneId !== "bench"
     ) {
-      cleanRow.zoneId = existing.zoneId;
+      row.zoneId = existing.zoneId;
     }
 
-    // enforce bench on every row
-    if (benchSeat && benchSeat >= 1 && benchSeat <= seats) {
-      cleanRow.seatOverrides[String(benchSeat)] = "bench";
+    for (const [seatNumber, seatType] of Object.entries(
+      existing.seatOverrides || {},
+    )) {
+      if (seatType !== "accessible") {
+        row.seatOverrides[seatNumber] = seatType;
+      }
     }
 
-    // enforce PMR only on requested row
+    benchSeats.forEach((benchSeat) => {
+      if (benchSeat >= 1 && benchSeat <= seats) {
+        row.seatOverrides[String(benchSeat)] = "bench";
+      }
+    });
+
     if (pmrRule && pmrRule.rowNumber === i + 1) {
-      cleanRow.wheelchair = pmrRule.count;
-
+      row.wheelchair = pmrRule.count;
       for (let s = 1; s <= pmrRule.count; s += 1) {
         if (s <= seats) {
-          cleanRow.seatOverrides[String(s)] = "accessible";
+          row.seatOverrides[String(s)] = "accessible";
         }
       }
     }
 
-    result.push(cleanRow);
+    result.push(row);
   }
 
   return result;
@@ -487,8 +517,8 @@ async function callOllama(prompt) {
       ],
       stream: false,
       options: {
-        temperature: 0.1,
-        num_predict: 1600,
+        temperature: 0.05,
+        num_predict: 4096,
       },
     }),
   });

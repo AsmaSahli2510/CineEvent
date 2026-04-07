@@ -69,48 +69,12 @@ const VENUE_PRESETS = [
     ambience: "dark",
     covered: true,
     rows: [
-      {
-        label: "A",
-        seats: 16,
-        aisleEvery: 4,
-        zoneId: "premium",
-        wheelchair: 0,
-      },
-      {
-        label: "B",
-        seats: 18,
-        aisleEvery: 6,
-        zoneId: "premium",
-        wheelchair: 0,
-      },
-      {
-        label: "C",
-        seats: 20,
-        aisleEvery: 5,
-        zoneId: "standard",
-        wheelchair: 0,
-      },
-      {
-        label: "D",
-        seats: 22,
-        aisleEvery: 5,
-        zoneId: "standard",
-        wheelchair: 0,
-      },
-      {
-        label: "E",
-        seats: 22,
-        aisleEvery: 5,
-        zoneId: "standard",
-        wheelchair: 2,
-      },
-      {
-        label: "F",
-        seats: 24,
-        aisleEvery: 6,
-        zoneId: "standard",
-        wheelchair: 2,
-      },
+      { label: "A", seats: 16, aisleEvery: 4, zoneId: "premium", wheelchair: 0 },
+      { label: "B", seats: 18, aisleEvery: 6, zoneId: "premium", wheelchair: 0 },
+      { label: "C", seats: 20, aisleEvery: 5, zoneId: "standard", wheelchair: 0 },
+      { label: "D", seats: 22, aisleEvery: 5, zoneId: "standard", wheelchair: 0 },
+      { label: "E", seats: 22, aisleEvery: 5, zoneId: "standard", wheelchair: 2 },
+      { label: "F", seats: 24, aisleEvery: 6, zoneId: "standard", wheelchair: 2 },
     ],
     structures: [
       {
@@ -136,34 +100,10 @@ const VENUE_PRESETS = [
     covered: false,
     rows: [
       { label: "A", seats: 10, aisleEvery: 5, zoneId: "vip", wheelchair: 0 },
-      {
-        label: "B",
-        seats: 12,
-        aisleEvery: 6,
-        zoneId: "premium",
-        wheelchair: 0,
-      },
-      {
-        label: "C",
-        seats: 14,
-        aisleEvery: 7,
-        zoneId: "premium",
-        wheelchair: 0,
-      },
-      {
-        label: "D",
-        seats: 16,
-        aisleEvery: 8,
-        zoneId: "standard",
-        wheelchair: 2,
-      },
-      {
-        label: "E",
-        seats: 16,
-        aisleEvery: 8,
-        zoneId: "standard",
-        wheelchair: 2,
-      },
+      { label: "B", seats: 12, aisleEvery: 6, zoneId: "premium", wheelchair: 0 },
+      { label: "C", seats: 14, aisleEvery: 7, zoneId: "premium", wheelchair: 0 },
+      { label: "D", seats: 16, aisleEvery: 8, zoneId: "standard", wheelchair: 2 },
+      { label: "E", seats: 16, aisleEvery: 8, zoneId: "standard", wheelchair: 2 },
     ],
     structures: [
       { id: "s-food-1", type: "food", name: "Food Truck", side: "west" },
@@ -180,27 +120,9 @@ const VENUE_PRESETS = [
     covered: false,
     rows: [
       { label: "A", seats: 18, aisleEvery: 6, zoneId: "vip", wheelchair: 0 },
-      {
-        label: "B",
-        seats: 20,
-        aisleEvery: 5,
-        zoneId: "premium",
-        wheelchair: 0,
-      },
-      {
-        label: "C",
-        seats: 24,
-        aisleEvery: 6,
-        zoneId: "standard",
-        wheelchair: 2,
-      },
-      {
-        label: "D",
-        seats: 24,
-        aisleEvery: 6,
-        zoneId: "standard",
-        wheelchair: 2,
-      },
+      { label: "B", seats: 20, aisleEvery: 5, zoneId: "premium", wheelchair: 0 },
+      { label: "C", seats: 24, aisleEvery: 6, zoneId: "standard", wheelchair: 2 },
+      { label: "D", seats: 24, aisleEvery: 6, zoneId: "standard", wheelchair: 2 },
     ],
     structures: [
       { id: "s-vip-lounge", type: "lounge", name: "VIP Lounge", side: "east" },
@@ -234,6 +156,85 @@ const STRUCTURE_LIBRARY = [
 
 const SIDES = ["north", "south", "east", "west", "center"];
 const STRUCTURE_SIDE_OPTIONS = SIDES.filter((side) => side !== "center");
+
+const AI_TEMPLATE_PRESETS = [
+  {
+    id: "indoor-basic",
+    name: "Indoor Cinema",
+    icon: "movie",
+    defaults: {
+      venueName: "Royal Cinema Hall",
+      description: "Elegant indoor cinema for premieres and special screenings",
+      screenLabel: "SCREEN",
+      ambience: "dark",
+      covered: true,
+      rows: 10,
+      seatsPerRow: 16,
+      vipRows: "1-2",
+      premiumRows: "3-6",
+      standardRows: "7-10",
+      benchSeats: "8, 10",
+      pmrRow: 10,
+      pmrCount: 2,
+      components: [
+        { type: "entrance", side: "north" },
+        { type: "projection", side: "south" },
+        { type: "restroom", side: "west" },
+      ],
+    },
+  },
+  {
+    id: "open-air-basic",
+    name: "Open Air",
+    icon: "outdoor_garden",
+    defaults: {
+      venueName: "Open Sky Venue",
+      description: "Outdoor cinema venue for summer screenings",
+      screenLabel: "OUTDOOR STAGE",
+      ambience: "sky",
+      covered: false,
+      rows: 8,
+      seatsPerRow: 14,
+      vipRows: "1-2",
+      premiumRows: "3-5",
+      standardRows: "6-8",
+      benchSeats: "7",
+      pmrRow: 8,
+      pmrCount: 2,
+      components: [
+        { type: "food", side: "west" },
+        { type: "bar", side: "east" },
+        { type: "shelter", side: "north" },
+      ],
+    },
+  },
+  {
+    id: "festival-basic",
+    name: "Festival Arena",
+    icon: "celebration",
+    defaults: {
+      venueName: "Festival Arena",
+      description: "Festival venue for movie and live event nights",
+      screenLabel: "MAIN STAGE",
+      ambience: "festival",
+      covered: false,
+      rows: 12,
+      seatsPerRow: 18,
+      vipRows: "1-3",
+      premiumRows: "4-8",
+      standardRows: "9-12",
+      benchSeats: "9",
+      pmrRow: 12,
+      pmrCount: 4,
+      components: [
+        { type: "entrance", side: "north" },
+        { type: "lounge", side: "east" },
+        { type: "food", side: "west" },
+        { type: "backstage", side: "south" },
+      ],
+    },
+  },
+];
 
 function cloneState(value) {
   return JSON.parse(JSON.stringify(value));
@@ -330,6 +331,117 @@ function nextRowLabel(rows) {
   return `${first}${second}`;
 }
 
+function buildAiFormFromTemplate(template) {
+  return {
+    venueName: template.venueName || "Custom Venue Template",
+    description: template.description || "AI-generated venue layout.",
+    screenLabel: template.screenLabel || "SCREEN",
+    ambience: template.ambience || "dark",
+    covered: template.covered ?? true,
+    rows: template.rows || 10,
+    seatsPerRow: template.seatsPerRow || 12,
+    vipRows: template.vipRows || "",
+    premiumRows: template.premiumRows || "",
+    standardRows: template.standardRows || "",
+    benchSeats: template.benchSeats || "",
+    pmrRow: template.pmrRow || "",
+    pmrCount: template.pmrCount || "",
+    components: template.components || [],
+  };
+}
+
+function formatComponentLabel(type) {
+  const item = STRUCTURE_LIBRARY.find((entry) => entry.type === type);
+  return item ? item.name : type;
+}
+
+function parseBenchSeats(text) {
+  return String(text || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => Number(item))
+    .filter((num) => Number.isInteger(num) && num > 0);
+}
+
+function parseRowRange(text) {
+  const value = String(text || "").trim();
+  if (!value) {
+    return null;
+  }
+
+  const match = value.match(/^(\d+)\s*-\s*(\d+)$/);
+  if (!match) {
+    return null;
+  }
+
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start <= 0 || end < start) {
+    return null;
+  }
+
+  return { start, end };
+}
+
+function buildPromptFromForm(form) {
+  const lines = [];
+
+  const vipRange = parseRowRange(form.vipRows);
+  const premiumRange = parseRowRange(form.premiumRows);
+  const standardRange = parseRowRange(form.standardRows);
+  const benchSeats = parseBenchSeats(form.benchSeats);
+
+  lines.push(`Create a venue called ${form.venueName}.`);
+  lines.push(`Description: ${form.description}.`);
+  lines.push(`Use screen label ${form.screenLabel}.`);
+  lines.push(
+    `Ambience is ${form.ambience} and the venue is ${form.covered ? "covered" : "not covered"}.`,
+  );
+  lines.push("");
+  lines.push(`Generate exactly ${form.rows} rows.`);
+  lines.push(`Each row has exactly ${form.seatsPerRow} seats.`);
+  lines.push("");
+
+  if (vipRange) {
+    lines.push(`Rows ${vipRange.start} to ${vipRange.end} must be VIP.`);
+  }
+
+  if (premiumRange) {
+    lines.push(`Rows ${premiumRange.start} to ${premiumRange.end} must be premium.`);
+  }
+
+  if (standardRange) {
+    lines.push(`Rows ${standardRange.start} to ${standardRange.end} must be standard.`);
+  }
+
+  if (benchSeats.length) {
+    const formattedSeats = benchSeats
+      .map((seat) => `seat number ${seat}`)
+      .join(" and ");
+    lines.push(`${formattedSeats} in every row must be bench using seatOverrides.`);
+  }
+
+  if (form.pmrRow && form.pmrCount) {
+    lines.push("");
+    lines.push(`Only row ${form.pmrRow} may contain wheelchair seats.`);
+    lines.push(
+      `Row ${form.pmrRow} must contain exactly ${form.pmrCount} wheelchair seats using wheelchair: ${form.pmrCount} and seatOverrides.`,
+    );
+  }
+
+  if (form.components.length) {
+    lines.push("");
+    lines.push("Add only these components:");
+    form.components.forEach((component) => {
+      lines.push(`${formatComponentLabel(component.type)} on ${component.side}.`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
 export default function CreateRoomTemplatePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -368,6 +480,11 @@ export default function CreateRoomTemplatePage() {
   const [redoStack, setRedoStack] = useState([]);
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [isAiOpen, setIsAiOpen] = useState(false);
+  const [aiTab, setAiTab] = useState("templates");
+  const [aiForm, setAiForm] = useState(() =>
+    buildAiFormFromTemplate(AI_TEMPLATE_PRESETS[0].defaults),
+  );
 
   useEffect(() => {
     editorRef.current = editor;
@@ -797,6 +914,7 @@ export default function CreateRoomTemplatePage() {
       setSelectedRowId(rowsWithIds[0]?.id || null);
       setSelectedStructureId(structuresWithIds[0]?.id || null);
       setSelectedSeat(null);
+      setIsAiOpen(false);
       announce("AI venue generated successfully.");
     } catch (error) {
       console.error("AI generation error:", error);
@@ -804,6 +922,59 @@ export default function CreateRoomTemplatePage() {
     } finally {
       setIsGeneratingAI(false);
     }
+  };
+
+  const applyAiTemplatePreset = (presetId) => {
+    const preset = AI_TEMPLATE_PRESETS.find((item) => item.id === presetId);
+    if (!preset) {
+      return;
+    }
+
+    const nextForm = buildAiFormFromTemplate(preset.defaults);
+    setAiForm(nextForm);
+    setAiTab("templates");
+    announce(`Loaded AI template: ${preset.name}`);
+  };
+
+  const updateAiForm = (field, value) => {
+    setAiForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const addAiComponent = () => {
+    setAiForm((prev) => ({
+      ...prev,
+      components: [...prev.components, { type: "entrance", side: "north" }],
+    }));
+  };
+
+  const updateAiComponent = (index, field, value) => {
+    setAiForm((prev) => ({
+      ...prev,
+      components: prev.components.map((component, componentIndex) =>
+        componentIndex === index
+          ? { ...component, [field]: value }
+          : component,
+      ),
+    }));
+  };
+
+  const removeAiComponent = (index) => {
+    setAiForm((prev) => ({
+      ...prev,
+      components: prev.components.filter(
+        (_, componentIndex) => componentIndex !== index,
+      ),
+    }));
+  };
+
+  const convertFormToPrompt = () => {
+    const prompt = buildPromptFromForm(aiForm);
+    setAiPrompt(prompt);
+    setAiTab("prompt");
+    announce("Template converted to prompt.");
   };
 
   const saveTemplate = async () => {
@@ -1009,41 +1180,6 @@ export default function CreateRoomTemplatePage() {
             <aside className="w-14 lg:w-56 border-r border-white/5 bg-charcoal flex flex-col p-2 lg:p-4 overflow-y-auto custom-scrollbar">
               <div className="mb-6">
                 <h3 className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-3 hidden lg:block">
-                  AI Venue Generator
-                </h3>
-                <div className="space-y-2">
-                  <textarea
-                    className="hidden lg:block w-full min-h-[120px] resize-none bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white focus:outline-none focus:border-accent"
-                    placeholder="Describe your venue... Example: Create a venue called Sunset Festival Arena, open sky, festival ambience, 8 rows with 14 seats each, seat 7 bench in every row, row 8 has 2 PMR seats, add entrance north and bar east."
-                    value={aiPrompt}
-                    onChange={(event) => setAiPrompt(event.target.value)}
-                  />
-                  <button
-                    className="w-full p-2 rounded-lg border border-accent/50 bg-accent/10 hover:bg-accent/20 text-left transition-all"
-                    onClick={handleAIGenerate}
-                    type="button"
-                    disabled={isGeneratingAI}>
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-accent text-[18px]">
-                        auto_awesome
-                      </span>
-                      <div className="hidden lg:block">
-                        <p className="text-[11px] font-bold text-white leading-none">
-                          {isGeneratingAI
-                            ? "Generating..."
-                            : "Generate with AI"}
-                        </p>
-                        <p className="text-[9px] text-white/50 mt-0.5">
-                          Name, layout, ambience, structures
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h3 className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-3 hidden lg:block">
                   Venue Preset
                 </h3>
                 <div className="space-y-1.5">
@@ -1224,7 +1360,7 @@ export default function CreateRoomTemplatePage() {
                 ) : null}
 
                 {structureGroups.east.length ? (
-                  <div className="absolute left-full top-[52%] ml-3 flex -translate-y-1/2 flex-col items-start gap-1.5">
+                  <div className="absolute left-full top-1/2 ml-3 flex -translate-y-1/2 flex-col items-start gap-1.5">
                     {structureGroups.east.map((structure) => {
                       const structureMeta =
                         STRUCTURE_LIBRARY.find(
@@ -1410,6 +1546,310 @@ export default function CreateRoomTemplatePage() {
                 ) : null}
               </div>
             </div>
+
+            {!isPreview && (
+              <>
+                <button
+                  className="absolute bottom-5 right-5 z-20 h-14 w-14 rounded-full bg-accent text-charcoal shadow-2xl border border-accent/40 hover:scale-105 transition-all flex items-center justify-center"
+                  onClick={() => setIsAiOpen((prev) => !prev)}
+                  type="button"
+                  title="Open AI assistant">
+                  <span className="material-symbols-outlined text-[28px]">
+                    auto_awesome
+                  </span>
+                </button>
+
+                {isAiOpen ? (
+                  <div className="absolute right-5 bottom-24 z-30 w-[380px] max-w-[calc(100%-2rem)] rounded-3xl border border-white/10 bg-charcoal/95 backdrop-blur-2xl shadow-2xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                      <div>
+                        <h3 className="text-sm font-black text-white">
+                          AI Venue Assistant
+                        </h3>
+                        <p className="text-[10px] text-white/45">
+                          Templates first, prompt second
+                        </p>
+                      </div>
+                      <button
+                        className="material-symbols-outlined text-white/60 hover:text-white"
+                        onClick={() => setIsAiOpen(false)}
+                        type="button">
+                        close
+                      </button>
+                    </div>
+
+                    <div className="flex bg-white/5 m-3 rounded-xl p-1">
+                      <button
+                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold ${
+                          aiTab === "templates"
+                            ? "bg-accent text-charcoal"
+                            : "text-white/60 hover:text-white"
+                        }`}
+                        onClick={() => setAiTab("templates")}
+                        type="button">
+                        Templates
+                      </button>
+                      <button
+                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold ${
+                          aiTab === "prompt"
+                            ? "bg-accent text-charcoal"
+                            : "text-white/60 hover:text-white"
+                        }`}
+                        onClick={() => setAiTab("prompt")}
+                        type="button">
+                        Custom Prompt
+                      </button>
+                    </div>
+
+                    <div className="max-h-[70vh] overflow-y-auto custom-scrollbar px-4 pb-4">
+                      {aiTab === "templates" ? (
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-[11px] font-bold text-white/50 uppercase tracking-wider mb-2">
+                              Quick starts
+                            </p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {AI_TEMPLATE_PRESETS.map((preset) => (
+                                <button
+                                  key={preset.id}
+                                  className="rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 p-3 text-left transition-all"
+                                  onClick={() => applyAiTemplatePreset(preset.id)}
+                                  type="button">
+                                  <span className="material-symbols-outlined text-accent text-[20px]">
+                                    {preset.icon}
+                                  </span>
+                                  <p className="text-[11px] font-bold text-white mt-2">
+                                    {preset.name}
+                                  </p>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 space-y-3">
+                            <p className="text-[11px] font-bold text-white/50 uppercase tracking-wider">
+                              Venue info
+                            </p>
+
+                            <input
+                              className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                              placeholder="Venue name"
+                              value={aiForm.venueName}
+                              onChange={(e) => updateAiForm("venueName", e.target.value)}
+                            />
+
+                            <textarea
+                              className="w-full min-h-[72px] resize-none bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                              placeholder="Short description"
+                              value={aiForm.description}
+                              onChange={(e) => updateAiForm("description", e.target.value)}
+                            />
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                className="bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                                placeholder="Screen label"
+                                value={aiForm.screenLabel}
+                                onChange={(e) => updateAiForm("screenLabel", e.target.value)}
+                              />
+                              <select
+                                className="bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                                value={aiForm.ambience}
+                                onChange={(e) => updateAiForm("ambience", e.target.value)}>
+                                <option value="dark">Dark</option>
+                                <option value="sky">Sky</option>
+                                <option value="festival">Festival</option>
+                              </select>
+                            </div>
+
+                            <button
+                              className={`w-full rounded-xl border px-3 py-2 text-sm font-bold ${
+                                aiForm.covered
+                                  ? "bg-primary/25 border-primary/40 text-accent"
+                                  : "bg-black/20 border-white/10 text-white/70"
+                              }`}
+                              onClick={() => updateAiForm("covered", !aiForm.covered)}
+                              type="button">
+                              {aiForm.covered ? "Covered venue" : "Open sky venue"}
+                            </button>
+                          </div>
+
+                          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 space-y-3">
+                            <p className="text-[11px] font-bold text-white/50 uppercase tracking-wider">
+                              Layout
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                className="bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                                type="number"
+                                min={1}
+                                value={aiForm.rows}
+                                onChange={(e) =>
+                                  updateAiForm("rows", Math.max(1, Number(e.target.value) || 1))
+                                }
+                                placeholder="Number of rows"
+                              />
+                              <input
+                                className="bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                                type="number"
+                                min={4}
+                                value={aiForm.seatsPerRow}
+                                onChange={(e) =>
+                                  updateAiForm("seatsPerRow", Math.max(4, Number(e.target.value) || 4))
+                                }
+                                placeholder="Seats per row"
+                              />
+                            </div>
+
+                            <input
+                              className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                              placeholder="VIP rows (example: 1-2)"
+                              value={aiForm.vipRows}
+                              onChange={(e) => updateAiForm("vipRows", e.target.value)}
+                            />
+
+                            <input
+                              className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                              placeholder="Premium rows (example: 3-6)"
+                              value={aiForm.premiumRows}
+                              onChange={(e) => updateAiForm("premiumRows", e.target.value)}
+                            />
+
+                            <input
+                              className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                              placeholder="Standard rows (example: 7-10)"
+                              value={aiForm.standardRows}
+                              onChange={(e) => updateAiForm("standardRows", e.target.value)}
+                            />
+                          </div>
+
+                          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 space-y-3">
+                            <p className="text-[11px] font-bold text-white/50 uppercase tracking-wider">
+                              Special seats
+                            </p>
+
+                            <input
+                              className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                              placeholder="Bench seat numbers in every row (example: 8, 10)"
+                              value={aiForm.benchSeats}
+                              onChange={(e) => updateAiForm("benchSeats", e.target.value)}
+                            />
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                className="bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                                type="number"
+                                min={0}
+                                value={aiForm.pmrRow}
+                                onChange={(e) =>
+                                  updateAiForm("pmrRow", Math.max(0, Number(e.target.value) || 0))
+                                }
+                                placeholder="PMR row"
+                              />
+                              <input
+                                className="bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                                type="number"
+                                min={0}
+                                value={aiForm.pmrCount}
+                                onChange={(e) =>
+                                  updateAiForm("pmrCount", Math.max(0, Number(e.target.value) || 0))
+                                }
+                                placeholder="PMR seats"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-[11px] font-bold text-white/50 uppercase tracking-wider">
+                                Components
+                              </p>
+                              <button
+                                className="text-[11px] font-bold text-accent"
+                                onClick={addAiComponent}
+                                type="button">
+                                + Add
+                              </button>
+                            </div>
+
+                            <div className="space-y-2">
+                              {aiForm.components.map((component, index) => (
+                                <div
+                                  key={`ai-component-${index}`}
+                                  className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                                  <select
+                                    className="bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                                    value={component.type}
+                                    onChange={(e) =>
+                                      updateAiComponent(index, "type", e.target.value)
+                                    }>
+                                    {STRUCTURE_LIBRARY.map((item) => (
+                                      <option key={item.type} value={item.type}>
+                                        {item.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <select
+                                    className="bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-sm text-white"
+                                    value={component.side}
+                                    onChange={(e) =>
+                                      updateAiComponent(index, "side", e.target.value)
+                                    }>
+                                    {SIDES.filter((side) => side !== "center").map((side) => (
+                                      <option key={side} value={side}>
+                                        {side.toUpperCase()}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    className="material-symbols-outlined text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-2"
+                                    onClick={() => removeAiComponent(index)}
+                                    type="button">
+                                    delete
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <button
+                            className="w-full rounded-xl bg-white/10 border border-white/10 px-3 py-3 text-sm font-black text-white hover:bg-white/15"
+                            onClick={convertFormToPrompt}
+                            type="button">
+                            Convert form → prompt
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <textarea
+                            className="w-full min-h-[260px] resize-none bg-white/5 border border-white/10 rounded-2xl px-3 py-3 text-sm text-white focus:outline-none focus:border-accent"
+                            placeholder="Write your custom AI prompt here... Example: Create a venue name, choose indoor or outdoor, set number of rows and seats per row, define VIP/premium/standard row ranges, add bench or PMR seats, and place components like entrance, bar, food area, or restrooms."
+                            value={aiPrompt}
+                            onChange={(event) => setAiPrompt(event.target.value)}
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="flex-1 rounded-xl bg-accent text-charcoal px-3 py-3 text-sm font-black hover:opacity-90"
+                              onClick={handleAIGenerate}
+                              type="button"
+                              disabled={isGeneratingAI}>
+                              {isGeneratingAI ? "Generating..." : "Generate with AI"}
+                            </button>
+                            <button
+                              className="rounded-xl bg-white/10 border border-white/10 px-3 py-3 text-sm font-bold text-white hover:bg-white/15"
+                              onClick={() => setAiTab("templates")}
+                              type="button">
+                              Back
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
 
             {isPreview ? null : (
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-charcoal/85 backdrop-blur-xl border border-white/10 px-3 py-1.5 rounded-2xl flex items-center gap-3 shadow-2xl z-10">
