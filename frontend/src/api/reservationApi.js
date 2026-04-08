@@ -68,6 +68,46 @@ export const getUserReservations = async (page = 1, limit = 10) => {
 };
 
 /**
+ * Fetch organizer's reservations for their events
+ * @param {number} page - Page number (default: 1)
+ * @param {number} limit - Items per page (default: 20)
+ * @param {string} status - Filter by reservation status (optional)
+ * @returns {Promise<{reservations: Array, pagination: Object}>}
+ */
+export const getOrganizerReservations = async (page = 1, limit = 20, status) => {
+  const headers = getAuthHeaders();
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    throw new Error("No authentication token found. Please login first.");
+  }
+
+  let url = `${API_BASE_URL}/reservations/organizer/events?page=${page}&limit=${limit}`;
+  if (status) {
+    url += `&status=${status}`;
+  }
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+
+  const data = await parseJson(response);
+
+  if (!response.ok) {
+    console.error("Organizer Reservations API Error:", {
+      status: response.status,
+      message: data.message,
+      data,
+    });
+    throw new Error(data.message || "Failed to fetch organizer reservations");
+  }
+
+  console.log("Organizer reservations fetched successfully:", data);
+  return data;
+};
+
+/**
  * Create a Stripe payment intent for guest reservation
  * @param {Object} paymentData - Payment data including eventId, selectedSeats, totalAmount, guestInfo
  * @returns {Promise<{clientSecret: string, paymentIntentId: string}>}

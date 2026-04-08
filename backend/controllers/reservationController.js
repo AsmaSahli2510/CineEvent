@@ -144,11 +144,57 @@ const cancelReservation = async (req, res) => {
   }
 };
 
+// @desc    Get reservations for organizer's events
+// @route   GET /api/reservations/organizer/events
+// @access  Private
+const getOrganizerReservations = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const { skip } = paginate(page, limit);
+
+    // Get all events organized by the current user
+    const organizerEvents = await Event.find({ organizer: req.user._id }).select(
+      "_id"
+    );
+    const eventIds = organizerEvents.map((event) => event._id);
+
+    if (eventIds.length === 0) {
+      return res.json({
+        reservations: [],
+        pagination: buildPaginationMeta(0, page, limit),
+      });
+    }
+
+    // Build filter for reservations
+    const filter = { event: { $in: eventIds } };
+    if (status) filter.status = status;
+
+    const total = await Reservation.countDocuments(filter);
+    const reservations = await Reservation.find(filter)
+      .populate("user", "name email")
+      .populate({
+        path: "event",
+        populate: { path: "movie", select: "title poster" },
+      })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .sort({ createdAt: -1 });
+
+    res.json({
+      reservations,
+      pagination: buildPaginationMeta(total, page, limit),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createReservation,
   getMyReservations,
   getAllReservations,
   cancelReservation,
+  getOrganizerReservations,
   createPaymentIntent,
   confirmGuestReservation,
 };

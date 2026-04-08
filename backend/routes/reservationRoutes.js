@@ -5,6 +5,7 @@ const {
   getMyReservations,
   getAllReservations,
   cancelReservation,
+  getOrganizerReservations,
   createPaymentIntent,
   confirmGuestReservation,
 } = require("../controllers/reservationController");
@@ -13,6 +14,7 @@ const { protect, adminOnly } = require("../middleware/authMiddleware");
 // Authenticated routes
 router.post("/", protect, createReservation);
 router.get("/my", protect, getMyReservations);
+router.get("/organizer/events", protect, getOrganizerReservations);
 router.get("/", protect, adminOnly, getAllReservations);
 router.put("/:id/cancel", protect, cancelReservation);
 
