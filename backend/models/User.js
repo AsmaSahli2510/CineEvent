@@ -123,6 +123,36 @@ const userSchema = new mongoose.Schema(
         ref: "Event",
       },
     ],
+    wallet: {
+      totalEarnings: {
+        type: Number,
+        default: 0,
+      },
+      currentBalance: {
+        type: Number,
+        default: 0,
+      },
+      totalPaidOut: {
+        type: Number,
+        default: 0,
+      },
+      lastPayoutDate: {
+        type: Date,
+        default: null,
+      },
+      bankDetailsVerified: {
+        type: Boolean,
+        default: false,
+      },
+      commissionRate: {
+        type: Number,
+        default: 10, // Default 10% commission for admin
+      },
+      pendingPayoutAmount: {
+        type: Number,
+        default: 0,
+      },
+    },
   },
   { timestamps: true },
 );

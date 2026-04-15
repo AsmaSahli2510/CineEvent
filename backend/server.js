@@ -14,6 +14,7 @@ const reservationRoutes = require("./routes/reservationRoutes");
 const venueTemplateRoutes = require("./routes/venueTemplateRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const wishlistRoutes = require("./routes/wishlistRoutes");
+const walletRoutes = require("./routes/walletRoutes");
 
 dotenv.config();
 
@@ -63,6 +64,7 @@ app.use("/api/reservations", reservationRoutes);
 app.use("/api/venue-templates", venueTemplateRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/wishlist", wishlistRoutes);
+app.use("/api/wallets", walletRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -153,9 +153,9 @@ const getOrganizerReservations = async (req, res) => {
     const { skip } = paginate(page, limit);
 
     // Get all events organized by the current user
-    const organizerEvents = await Event.find({ organizer: req.user._id }).select(
-      "_id"
-    );
+    const organizerEvents = await Event.find({
+      organizer: req.user._id,
+    }).select("_id");
     const eventIds = organizerEvents.map((event) => event._id);
 
     if (eventIds.length === 0) {

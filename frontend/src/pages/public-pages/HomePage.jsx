@@ -3,6 +3,8 @@ import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { getEvents } from "../../api/eventApi";
 import { toggleWishlist, isEventInWishlist } from "../../api/wishlistApi";
+import MovieRecommendationChat from "../../components/MovieRecommendationChat";
+import MovieAIFloatingButton from "../../components/MovieAIFloatingButton";
 import heroImg from "../../images/upscalemedia-transformed.png";
 import parisImg from "../../images/projecteur.png";
 
@@ -256,6 +258,7 @@ export default function HomePage() {
   const showJoinCards = !(isAuthenticated && currentUser);
   const [popularEvents, setPopularEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isMovieAIChatOpen, setIsMovieAIChatOpen] = useState(false);
 
   useEffect(() => {
     const fetchPopularEvents = async () => {
@@ -464,6 +467,15 @@ export default function HomePage() {
           </section>
         )}
       </main>
+
+      {/* Movie AI Floating Button */}
+      <MovieAIFloatingButton onClick={() => setIsMovieAIChatOpen(true)} />
+
+      {/* Movie Recommendation Chat Dialog */}
+      <MovieRecommendationChat
+        isOpen={isMovieAIChatOpen}
+        onClose={() => setIsMovieAIChatOpen(false)}
+      />
     </>
   );
 }

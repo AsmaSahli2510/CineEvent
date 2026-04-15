@@ -74,7 +74,11 @@ export const getUserReservations = async (page = 1, limit = 10) => {
  * @param {string} status - Filter by reservation status (optional)
  * @returns {Promise<{reservations: Array, pagination: Object}>}
  */
-export const getOrganizerReservations = async (page = 1, limit = 20, status) => {
+export const getOrganizerReservations = async (
+  page = 1,
+  limit = 20,
+  status,
+) => {
   const headers = getAuthHeaders();
   const token = localStorage.getItem("token");
 

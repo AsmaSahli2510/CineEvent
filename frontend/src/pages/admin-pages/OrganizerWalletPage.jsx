@@ -1,34 +1,206 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import AdminPageFrame from "../../components/admin/AdminPageFrame";
+import {
+  getAllOrganizersWallet,
+  triggerPayout,
+  verifyBankDetails,
+} from "../../api/walletApi";
 
 export default function OrganizerWalletPage() {
+  const [organizers, setOrganizers] = useState([]);
+  const [filteredOrganizers, setFilteredOrganizers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("balance_desc");
+  const [verificationFilter, setVerificationFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [pagination, setPagination] = useState(null);
+  const [processingPayoutId, setProcessingPayoutId] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  // Fetch organizers on component mount
+  useEffect(() => {
+    fetchOrganizers();
+  }, [page, limit, sortBy, verificationFilter]);
+
+  const fetchOrganizers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getAllOrganizersWallet(
+        page,
+        limit,
+        sortBy,
+        verificationFilter,
+      );
+      setOrganizers(data.organizers || []);
+      setPagination(data.pagination);
+      setFilteredOrganizers(data.organizers || []);
+    } catch (err) {
+      setError(err.message);
+      console.error("Error fetching organizers:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter organizers by search term
+  useEffect(() => {
+    if (searchTerm.trim() === "") {
+      setFilteredOrganizers(organizers);
+    } else {
+      const lowercaseSearch = searchTerm.toLowerCase();
+      const filtered = organizers.filter(
+        (org) =>
+          org.name?.toLowerCase().includes(lowercaseSearch) ||
+          org.email?.toLowerCase().includes(lowercaseSearch) ||
+          org.organizerProfile?.organizationName
+            ?.toLowerCase()
+            .includes(lowercaseSearch),
+      );
+      setFilteredOrganizers(filtered);
+    }
+  }, [searchTerm, organizers]);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // Handle trigger payout
+  const handleTriggerPayout = async (organizerId) => {
+    try {
+      setProcessingPayoutId(organizerId);
+      const result = await triggerPayout(organizerId);
+      showToast(
+        `Payout triggered successfully! Ref: ${result.payout.transactionReference}`,
+      );
+      // Refresh the list
+      fetchOrganizers();
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setProcessingPayoutId(null);
+    }
+  };
+
+  // Handle verify bank details
+  const handleVerifyBankDetails = async (organizerId, currentStatus) => {
+    try {
+      await verifyBankDetails(organizerId, !currentStatus);
+      showToast(
+        currentStatus
+          ? "Bank verification removed"
+          : "Bank details verified successfully",
+      );
+      fetchOrganizers();
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  };
+
+  // Helper function to format currency as TND
+  const formatCurrency = (amount) => {
+    return `TND ${amount.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
+  };
+
+  // Calculate totals
+  const totalOutstandingBalance = filteredOrganizers.reduce(
+    (sum, org) => sum + (org.wallet?.currentBalance || 0),
+    0,
+  );
+
+  const totalVerifiedBalance = filteredOrganizers
+    .filter((org) => org.wallet?.bankDetailsVerified)
+    .reduce((sum, org) => sum + (org.wallet?.currentBalance || 0), 0);
+
+  const activeOrganizers = filteredOrganizers.filter(
+    (org) => org.wallet?.bankDetailsVerified,
+  ).length;
+
+  // Calculate platform commission (10%) from organizer payouts (90%)
+  // If organizers get 90%, then: totalRevenue = balance / 0.9, platformCommission = totalRevenue * 0.1
+  const platformCommission = totalOutstandingBalance / 9; // This equals (balance / 0.9) * 0.1
+  const totalRevenue = totalOutstandingBalance + platformCommission;
+
   return (
     <>
       <style>{`
-				.organizer-wallet-page {
-					font-family: 'Spline Sans', sans-serif;
-				}
+        .organizer-wallet-page {
+          font-family: 'Spline Sans', sans-serif;
+        }
 
-				.organizer-wallet-page .custom-scrollbar::-webkit-scrollbar {
-					width: 6px;
-				}
+        .organizer-wallet-page .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
 
-				.organizer-wallet-page .custom-scrollbar::-webkit-scrollbar-track {
-					background: transparent;
-				}
+        .organizer-wallet-page .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
 
-				.organizer-wallet-page .custom-scrollbar::-webkit-scrollbar-thumb {
-					background: #800020;
-					border-radius: 10px;
-				}
+        .organizer-wallet-page .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #800020;
+          border-radius: 10px;
+        }
 
-				.organizer-wallet-page .sidebar-link.active {
-					background: rgba(128, 0, 32, 0.1);
-					border-right: 3px solid #F5C065;
-					color: #F5C065;
-				}
-			`}</style>
+        .organizer-wallet-page .sidebar-link.active {
+          background: rgba(128, 0, 32, 0.1);
+          border-right: 3px solid #F5C065;
+          color: #F5C065;
+        }
+
+        .toast {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          padding: 16px 24px;
+          border-radius: 8px;
+          font-weight: bold;
+          z-index: 9999;
+          animation: slideIn 0.3s ease-out;
+        }
+
+        .toast.success {
+          background: #10b981;
+          color: white;
+        }
+
+        .toast.error {
+          background: #ef4444;
+          color: white;
+        }
+
+        @keyframes slideIn {
+          from {
+            transform: translateX(400px);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+
+        .loading-spinner {
+          display: inline-block;
+          width: 20px;
+          height: 20px;
+          border: 3px solid rgba(255, 255, 255, 0.3);
+          border-top-color: #F5C065;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+
+      {/* Toast Notification */}
+      {toast && <div className={`toast ${toast.type}`}>{toast.message}</div>}
 
       <div className="organizer-wallet-page bg-background-dark text-white min-h-screen">
         <AdminPageFrame
@@ -120,11 +292,13 @@ export default function OrganizerWalletPage() {
                   </p>
                 </div>
                 <div className="flex gap-3">
-                  <button className="flex items-center gap-2 bg-white/5 text-white/60 border border-white/10 px-6 py-2.5 rounded-lg font-bold text-sm hover:bg-white/10 transition-all">
+                  <button
+                    onClick={() => fetchOrganizers()}
+                    className="flex items-center gap-2 bg-white/5 text-white/60 border border-white/10 px-6 py-2.5 rounded-lg font-bold text-sm hover:bg-white/10 transition-all">
                     <span className="material-symbols-outlined text-sm">
-                      history
+                      refresh
                     </span>
-                    Payout History
+                    Refresh
                   </button>
                   <button className="flex items-center gap-2 bg-accent text-charcoal px-6 py-2.5 rounded-lg font-bold text-sm hover:brightness-110 transition-all border border-accent shadow-lg shadow-accent/10">
                     <span className="material-symbols-outlined text-sm">
@@ -135,7 +309,27 @@ export default function OrganizerWalletPage() {
                 </div>
               </header>
 
+              {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                <div className="bg-white/5 p-6 rounded-2xl border border-white/10 shadow-sm relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <span className="material-symbols-outlined text-6xl">
+                      account_balance
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">
+                    Platform Commission (10%)
+                  </p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-black text-primary">
+                      {formatCurrency(platformCommission)}
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-white/30 mt-4 italic font-medium">
+                    Your earnings from all reservations
+                  </p>
+                </div>
+
                 <div className="bg-white/5 p-6 rounded-2xl border border-white/10 shadow-sm relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                     <span className="material-symbols-outlined text-6xl">
@@ -143,34 +337,16 @@ export default function OrganizerWalletPage() {
                     </span>
                   </div>
                   <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">
-                    Total Outstanding Balance
+                    Organizer Payouts (90%)
                   </p>
                   <div className="flex items-baseline gap-2">
                     <p className="text-3xl font-black text-accent">
-                      $128,450.00
+                      {formatCurrency(totalOutstandingBalance)}
                     </p>
                   </div>
                   <p className="text-[10px] text-white/30 mt-4 italic font-medium">
-                    Owed to 42 active organizers
-                  </p>
-                </div>
-
-                <div className="bg-white/5 p-6 rounded-2xl border border-white/10 shadow-sm relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <span className="material-symbols-outlined text-6xl">
-                      verified_user
-                    </span>
-                  </div>
-                  <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">
-                    Total Paid to Date
-                  </p>
-                  <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-black text-white">
-                      $2,145,900.00
-                    </p>
-                  </div>
-                  <p className="text-[10px] text-white/30 mt-4 italic font-medium">
-                    Fiscal year 2024 disbursements
+                    Owed to {filteredOrganizers.length} organizer
+                    {filteredOrganizers.length !== 1 ? "s" : ""}
                   </p>
                 </div>
 
@@ -181,20 +357,22 @@ export default function OrganizerWalletPage() {
                     </span>
                   </div>
                   <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">
-                    Last Payout Cycle Date
+                    Total Organizers
                   </p>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-black text-primary">
-                      Oct 24, 2023
+                    <p className="text-3xl font-black text-white">
+                      {pagination?.total || 0}
                     </p>
                   </div>
                   <p className="text-[10px] text-white/30 mt-4 italic font-medium">
-                    Weekly cycle: Every Friday
+                    Active accounts on platform
                   </p>
                 </div>
               </div>
 
+              {/* Filter and Table Section */}
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                {/* Filters */}
                 <div className="lg:col-span-1 space-y-6">
                   <div className="bg-white/5 p-6 rounded-2xl border border-white/10">
                     <h4 className="text-xs font-black text-accent uppercase tracking-widest mb-4">
@@ -205,9 +383,17 @@ export default function OrganizerWalletPage() {
                         <label className="text-[10px] font-bold text-white/40 uppercase block mb-2">
                           Balance Priority
                         </label>
-                        <select className="w-full bg-white/5 border-white/10 rounded-lg text-xs text-white focus:ring-accent focus:border-accent">
-                          <option>High Balance First</option>
-                          <option>Low Balance First</option>
+                        <select
+                          value={sortBy}
+                          onChange={(e) => {
+                            setSortBy(e.target.value);
+                            setPage(1);
+                          }}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg text-xs text-white focus:ring-accent focus:border-accent p-2">
+                          <option value="balance_desc">
+                            High Balance First
+                          </option>
+                          <option value="balance_asc">Low Balance First</option>
                         </select>
                       </div>
                       <div>
@@ -217,8 +403,15 @@ export default function OrganizerWalletPage() {
                         <div className="space-y-2">
                           <label className="flex items-center gap-2 cursor-pointer group">
                             <input
+                              type="radio"
+                              name="verification"
+                              value="unverified"
+                              checked={verificationFilter === "unverified"}
+                              onChange={(e) => {
+                                setVerificationFilter(e.target.value);
+                                setPage(1);
+                              }}
                               className="rounded border-white/10 bg-white/5 text-primary focus:ring-primary"
-                              type="checkbox"
                             />
                             <span className="text-xs text-white/60 group-hover:text-white transition-colors">
                               Pending Verification
@@ -226,19 +419,38 @@ export default function OrganizerWalletPage() {
                           </label>
                           <label className="flex items-center gap-2 cursor-pointer group">
                             <input
-                              defaultChecked
+                              type="radio"
+                              name="verification"
+                              value="verified"
+                              checked={verificationFilter === "verified"}
+                              onChange={(e) => {
+                                setVerificationFilter(e.target.value);
+                                setPage(1);
+                              }}
                               className="rounded border-white/10 bg-white/5 text-primary focus:ring-primary"
-                              type="checkbox"
                             />
                             <span className="text-xs text-white/60 group-hover:text-white transition-colors">
                               Verified Only
                             </span>
                           </label>
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                              type="radio"
+                              name="verification"
+                              value="all"
+                              checked={verificationFilter === "all"}
+                              onChange={(e) => {
+                                setVerificationFilter(e.target.value);
+                                setPage(1);
+                              }}
+                              className="rounded border-white/10 bg-white/5 text-primary focus:ring-primary"
+                            />
+                            <span className="text-xs text-white/60 group-hover:text-white transition-colors">
+                              All Accounts
+                            </span>
+                          </label>
                         </div>
                       </div>
-                      <button className="w-full py-2 bg-primary/20 hover:bg-primary/30 text-primary text-xs font-black rounded-lg transition-colors border border-primary/30">
-                        Apply Filters
-                      </button>
                     </div>
                   </div>
 
@@ -253,12 +465,13 @@ export default function OrganizerWalletPage() {
                     </div>
                     <p className="text-[11px] text-white/60 leading-relaxed italic">
                       Payouts are only allowed for organizers with "Bank Details
-                      Verified" status. Payouts over $10,000 require manual CFO
-                      override.
+                      Verified" status. Admin receives 10% commission on all
+                      transactions.
                     </p>
                   </div>
                 </div>
 
+                {/* Table */}
                 <div className="lg:col-span-3">
                   <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden shadow-xl">
                     <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
@@ -271,239 +484,217 @@ export default function OrganizerWalletPage() {
                           search
                         </span>
                         <input
-                          className="bg-white/5 border-white/10 rounded-full pl-9 pr-4 py-1.5 text-xs w-64 focus:ring-accent focus:border-accent"
+                          value={searchTerm}
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setPage(1);
+                          }}
+                          className="bg-white/5 border border-white/10 rounded-full pl-9 pr-4 py-1.5 text-xs w-64 focus:ring-accent focus:border-accent text-white placeholder-white/30"
                           placeholder="Search organizer..."
                           type="text"
                         />
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                        <thead className="bg-white/5">
-                          <tr>
-                            <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40">
-                              Organizer
-                            </th>
-                            <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40">
-                              Status
-                            </th>
-                            <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40">
-                              Comm. Rate
-                            </th>
-                            <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40 text-right">
-                              Current Balance
-                            </th>
-                            <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40 text-center">
-                              Action
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/10">
-                          <tr className="hover:bg-white/5 transition-colors">
-                            <td className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center">
-                                  <span className="material-symbols-outlined text-accent text-xl">
-                                    stars
-                                  </span>
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold">
-                                    Lumière Cinema
-                                  </p>
-                                  <p className="text-[10px] text-white/40">
-                                    ID: ORG-4921
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-success/20 text-success border border-success/20 uppercase tracking-tighter">
-                                <span className="material-symbols-outlined text-[10px] font-bold">
-                                  verified
-                                </span>
-                                Bank Verified
-                              </span>
-                            </td>
-                            <td className="p-4 text-xs font-medium text-white/60">
-                              15.0%
-                            </td>
-                            <td className="p-4 text-right">
-                              <p className="text-sm font-black text-white">
-                                $42,900.00
-                              </p>
-                              <p className="text-[9px] text-white/30">
-                                Last payout: 12 days ago
-                              </p>
-                            </td>
-                            <td className="p-4 text-center">
-                              <button className="bg-accent hover:brightness-110 text-charcoal px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all shadow-lg shadow-accent/5">
-                                Trigger Payout
-                              </button>
-                            </td>
-                          </tr>
-
-                          <tr className="hover:bg-white/5 transition-colors">
-                            <td className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-                                  <span className="material-symbols-outlined text-primary text-xl">
-                                    theater_comedy
-                                  </span>
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold">
-                                    Noir Collective
-                                  </p>
-                                  <p className="text-[10px] text-white/40">
-                                    ID: ORG-8842
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-success/20 text-success border border-success/20 uppercase tracking-tighter">
-                                <span className="material-symbols-outlined text-[10px] font-bold">
-                                  verified
-                                </span>
-                                Bank Verified
-                              </span>
-                            </td>
-                            <td className="p-4 text-xs font-medium text-white/60">
-                              12.5%
-                            </td>
-                            <td className="p-4 text-right">
-                              <p className="text-sm font-black text-white">
-                                $18,450.50
-                              </p>
-                              <p className="text-[9px] text-white/30">
-                                Last payout: 7 days ago
-                              </p>
-                            </td>
-                            <td className="p-4 text-center">
-                              <button className="bg-accent hover:brightness-110 text-charcoal px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all shadow-lg shadow-accent/5">
-                                Trigger Payout
-                              </button>
-                            </td>
-                          </tr>
-
-                          <tr className="hover:bg-white/5 transition-colors">
-                            <td className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                                  <span className="material-symbols-outlined text-white/40 text-xl">
-                                    stadium
-                                  </span>
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold">
-                                    Gatsby Events
-                                  </p>
-                                  <p className="text-[10px] text-white/40">
-                                    ID: ORG-9174
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-danger/20 text-danger border border-danger/20 uppercase tracking-tighter">
-                                <span className="material-symbols-outlined text-[10px] font-bold">
-                                  warning
-                                </span>
-                                Verification Pending
-                              </span>
-                            </td>
-                            <td className="p-4 text-xs font-medium text-white/60">
-                              10.0%
-                            </td>
-                            <td className="p-4 text-right">
-                              <p className="text-sm font-black text-white">
-                                $67,100.00
-                              </p>
-                              <p className="text-[9px] text-white/30">
-                                Never paid
-                              </p>
-                            </td>
-                            <td className="p-4 text-center">
-                              <button
-                                className="bg-white/5 text-white/20 cursor-not-allowed px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all"
-                                disabled>
-                                Trigger Payout
-                              </button>
-                            </td>
-                          </tr>
-
-                          <tr className="hover:bg-white/5 transition-colors">
-                            <td className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center">
-                                  <span className="material-symbols-outlined text-accent text-xl">
-                                    camera_roll
-                                  </span>
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold">
-                                    Vintage Film Club
-                                  </p>
-                                  <p className="text-[10px] text-white/40">
-                                    ID: ORG-1102
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-success/20 text-success border border-success/20 uppercase tracking-tighter">
-                                <span className="material-symbols-outlined text-[10px] font-bold">
-                                  verified
-                                </span>
-                                Bank Verified
-                              </span>
-                            </td>
-                            <td className="p-4 text-xs font-medium text-white/60">
-                              15.0%
-                            </td>
-                            <td className="p-4 text-right">
-                              <p className="text-sm font-black text-white">
-                                $4,210.00
-                              </p>
-                              <p className="text-[9px] text-white/30">
-                                Last payout: 1 month ago
-                              </p>
-                            </td>
-                            <td className="p-4 text-center">
-                              <button className="bg-accent hover:brightness-110 text-charcoal px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all shadow-lg shadow-accent/5">
-                                Trigger Payout
-                              </button>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-t border-white/10">
-                      <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
-                        Showing 4 of 42 Organizers
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors">
-                          <span className="material-symbols-outlined text-sm leading-none">
-                            chevron_left
-                          </span>
-                        </button>
-                        <button className="px-3 py-1 bg-primary text-white text-xs font-bold rounded-lg border border-primary/50 shadow-sm">
-                          1
-                        </button>
-                        <button className="px-3 py-1 bg-white/5 border border-white/10 text-xs font-bold rounded-lg hover:bg-white/10">
-                          2
-                        </button>
-                        <button className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors">
-                          <span className="material-symbols-outlined text-sm leading-none">
-                            chevron_right
-                          </span>
-                        </button>
+                    {/* Loading State */}
+                    {loading && (
+                      <div className="p-8 text-center">
+                        <div
+                          className="loading-spinner"
+                          style={{ margin: "0 auto" }}></div>
+                        <p className="text-white/60 mt-4">
+                          Loading organizers...
+                        </p>
                       </div>
-                    </div>
+                    )}
+
+                    {/* Error State */}
+                    {error && (
+                      <div className="p-8 text-center bg-danger/10 border-t border-danger/20">
+                        <p className="text-danger font-bold">{error}</p>
+                      </div>
+                    )}
+
+                    {/* Table Content */}
+                    {!loading && !error && (
+                      <>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead className="bg-white/5">
+                              <tr>
+                                <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40">
+                                  Organizer
+                                </th>
+                                <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40">
+                                  Status
+                                </th>
+                                <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40">
+                                  Comm. Rate
+                                </th>
+                                <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40 text-right">
+                                  Current Balance
+                                </th>
+                                <th className="p-4 text-xs font-bold uppercase tracking-wider text-white/40 text-center">
+                                  Action
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/10">
+                              {filteredOrganizers.length === 0 ? (
+                                <tr>
+                                  <td
+                                    colSpan="5"
+                                    className="p-8 text-center text-white/40">
+                                    No organizers found
+                                  </td>
+                                </tr>
+                              ) : (
+                                filteredOrganizers.map((org) => (
+                                  <tr
+                                    key={org._id}
+                                    className="hover:bg-white/5 transition-colors">
+                                    <td className="p-4">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center">
+                                          <span className="material-symbols-outlined text-accent text-xl">
+                                            business
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <p className="text-sm font-bold">
+                                            {org.organizerProfile
+                                              ?.organizationName || org.name}
+                                          </p>
+                                          <p className="text-[10px] text-white/40">
+                                            {org.email}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="p-4">
+                                      {org.wallet?.bankDetailsVerified ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-success/20 text-success border border-success/20 uppercase tracking-tighter">
+                                          <span className="material-symbols-outlined text-[10px] font-bold">
+                                            verified
+                                          </span>
+                                          Bank Verified
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-danger/20 text-danger border border-danger/20 uppercase tracking-tighter">
+                                          <span className="material-symbols-outlined text-[10px] font-bold">
+                                            warning
+                                          </span>
+                                          Pending
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="p-4 text-xs font-medium text-white/60">
+                                      {org.wallet?.commissionRate || 10}%
+                                    </td>
+                                    <td className="p-4 text-right">
+                                      <p className="text-sm font-black text-white">
+                                        {formatCurrency(
+                                          org.wallet?.currentBalance || 0,
+                                        )}
+                                      </p>
+                                      <p className="text-[9px] text-white/30">
+                                        {org.lastPayoutDate
+                                          ? `Last: ${new Date(org.lastPayoutDate).toLocaleDateString()}`
+                                          : "Never paid"}
+                                      </p>
+                                    </td>
+                                    <td className="p-4 text-center">
+                                      {org.wallet?.bankDetailsVerified ? (
+                                        <button
+                                          onClick={() =>
+                                            handleTriggerPayout(org._id)
+                                          }
+                                          disabled={
+                                            processingPayoutId === org._id
+                                          }
+                                          className="bg-accent hover:brightness-110 text-charcoal px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all shadow-lg shadow-accent/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                                          {processingPayoutId === org._id ? (
+                                            <>
+                                              <div
+                                                className="loading-spinner"
+                                                style={{
+                                                  width: "12px",
+                                                  height: "12px",
+                                                  borderWidth: "2px",
+                                                }}></div>
+                                              Processing
+                                            </>
+                                          ) : (
+                                            "Trigger Payout"
+                                          )}
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={() =>
+                                            handleVerifyBankDetails(
+                                              org._id,
+                                              org.wallet?.bankDetailsVerified,
+                                            )
+                                          }
+                                          className="bg-primary/50 hover:bg-primary text-white px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all">
+                                          Verify Bank
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Pagination */}
+                        {pagination && (
+                          <div className="bg-white/5 px-6 py-4 flex items-center justify-between border-t border-white/10">
+                            <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
+                              Showing {(page - 1) * limit + 1} to{" "}
+                              {Math.min(page * limit, pagination.total)} of{" "}
+                              {pagination.total} Organizers
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setPage(Math.max(1, page - 1))}
+                                disabled={page === 1}
+                                className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span className="material-symbols-outlined text-sm leading-none">
+                                  chevron_left
+                                </span>
+                              </button>
+                              {Array.from(
+                                { length: Math.min(5, pagination.pages) },
+                                (_, i) => i + 1,
+                              ).map((p) => (
+                                <button
+                                  key={p}
+                                  onClick={() => setPage(p)}
+                                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                                    page === p
+                                      ? "bg-primary text-white border border-primary/50 shadow-sm"
+                                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                                  }`}>
+                                  {p}
+                                </button>
+                              ))}
+                              <button
+                                onClick={() =>
+                                  setPage(Math.min(pagination.pages, page + 1))
+                                }
+                                disabled={page === pagination.pages}
+                                className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span className="material-symbols-outlined text-sm leading-none">
+                                  chevron_right
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
