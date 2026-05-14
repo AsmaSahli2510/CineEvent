@@ -1,5 +1,8 @@
 const express = require("express");
-const { generateVenueLayout, getMovieRecommendations } = require("../controllers/aiController");
+const {
+  generateVenueLayout,
+  getMovieRecommendations,
+} = require("../controllers/aiController");
 
 const router = express.Router();
 
@@ -71,9 +74,14 @@ router.post("/movie-recommendations", async (req, res) => {
 
     console.log("Movie Recommendation Route: Received request");
 
-    const result = await getMovieRecommendations(userInput, conversationHistory || []);
+    const result = await getMovieRecommendations(
+      userInput,
+      conversationHistory || [],
+    );
 
-    console.log(`Movie Recommendation Route: Returning ${result.recommendations.length} recommendations`);
+    console.log(
+      `Movie Recommendation Route: Returning ${result.recommendations.length} recommendations`,
+    );
 
     return res.json(result);
   } catch (error) {

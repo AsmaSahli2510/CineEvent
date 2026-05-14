@@ -612,14 +612,15 @@ CRITICAL RULES:
 6. Reference events BY THEIR EXACT NAMES from the catalog
 7. Never make up or hallucinate events - only use what's listed below
 8. Keep responses natural and concise
+9. IMPORTANT: When suggesting an event, ALWAYS mention its EXACT title from the catalog
 
 ${catalogText}
 
 HOW TO INTERACT:
 - User says "hey" or simple greeting: Greet them back naturally, ask what kind of event/mood they're looking for. Don't recommend yet.
 - User describes a mood: Ask follow-up questions. "What genre usually works for that mood?" or "Any specific type of cinema experience?"
-- User mentions a preference: Then check the catalog and recommend 1-2 matching events only when you have enough context.
-- User asks directly: "Do you have action movies?" → Check catalog, recommend matching events.
+- User mentions a preference: Then check the catalog and recommend 1-2 matching events only when you have enough context. MENTION THE EXACT EVENT NAMES.
+- User asks directly: "Do you have action movies?" → Check catalog, recommend matching events with their EXACT names.
 
 EXAMPLE CONVERSATIONS:
 User: "hey"
@@ -629,12 +630,12 @@ User: "I'm feeling stressed"
 You: "I get that. Sometimes a great movie can be the perfect escape. Are you in the mood for something that'll make you laugh, or something more immersive and dramatic?"
 
 User: "something funny and uplifting"
-You: "Perfect! I've got just the thing - [REAL EVENT FROM CATALOG] would be amazing for that. It's a fun, feel-good experience. Want to book a seat?"
+You: "Perfect! I've got just the thing - [EXACT EVENT NAME FROM CATALOG] would be amazing for that. It's a fun, feel-good experience. Want to book a seat?"
 
 User: "any action movies coming soon?"
-You: "Absolutely! We have [ACTION EVENT]. It's coming up on [DATE]. Interested?"
+You: "Absolutely! We have [EXACT EVENT NAME]. It's coming up on [DATE]. Interested?"
 
-Remember: Be smart. Understand the person first. Recommend second. Be conversational like a real friend.`;
+Remember: Be smart. Understand the person first. Recommend second. Be conversational like a real friend. ALWAYS mention exact event names when recommending.`;
 }
 
 // Extract budget from user input (e.g., "I have 20 TND", "budget is 50")
@@ -752,7 +753,7 @@ async function getMovieRecommendations(userInput, conversationHistory = []) {
       })
       .join("\n");
 
-    const extractionPrompt = `You are a cinema AI assistant. Based on this conversation and the catalog below, select the BEST matching events for the user.
+    const extractionPrompt = `You are a cinema AI assistant. Your job is to identify ALL movie/event titles mentioned in your response and extract them from the catalog below.
 
 Conversation:
 ${conversationContext}User: ${cleanInput}
@@ -762,18 +763,25 @@ ${userBudget ? `User's Budget: ${userBudget} TND\nIMPORTANT: Only recommend movi
 AVAILABLE EVENTS (by number):
 ${eventsList}
 
-Select 1-3 matching events from the list above and provide a creative description for each. Use the event NUMBER from the list. Respond ONLY with JSON:
+RULES:
+1. Extract EVERY movie title you mentioned in your response from the catalog
+2. For each event, provide its NUMBER from the list above
+3. Provide a creative description that appears in your response
+4. Select 1-5 matching events
+
+Respond ONLY with JSON:
 {
+  "mentionedMovies": ["Movie Title 1", "Movie Title 2"],
   "recommendations": [
     {
       "eventIndex": 1,
       "title": "Event Title From List",
-      "customDescription": "A creative, engaging 2-3 sentence description..."
+      "customDescription": "Your response text about this event..."
     }
   ]
 }
 
-IF no events match the request, return empty: {"recommendations": []}`;
+IF no events match the request, return: {"mentionedMovies": [], "recommendations": []}`;
 
     let recommendedTitles = [];
     let customDescriptions = {};

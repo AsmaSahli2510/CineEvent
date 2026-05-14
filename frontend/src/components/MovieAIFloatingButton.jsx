@@ -9,7 +9,7 @@ export default function MovieAIFloatingButton({ onClick }) {
       <span className="material-symbols-outlined text-[28px] group-hover:scale-125 transition-transform">
         auto_awesome
       </span>
-      
+
       {/* Optional pulsing indicator */}
       <div className="absolute inset-0 rounded-full border border-accent/50 animate-pulse"></div>
     </button>

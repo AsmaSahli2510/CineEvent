@@ -77,7 +77,9 @@ export default function OrganizerDashboardPage() {
             {/* Loading State */}
             {loading && (
               <div className="text-center py-12">
-                <div className="loading-spinner" style={{ margin: "0 auto" }}></div>
+                <div
+                  className="loading-spinner"
+                  style={{ margin: "0 auto" }}></div>
                 <p className="text-white/60 mt-4">Loading earnings data...</p>
               </div>
             )}
@@ -110,7 +112,8 @@ export default function OrganizerDashboardPage() {
                       </p>
                     </div>
                     <p className="text-[10px] text-white/30 mt-4 italic font-medium">
-                      Waiting for admin approval • {earnings.reservationCount} confirmed reservations
+                      Waiting for admin approval • {earnings.reservationCount}{" "}
+                      confirmed reservations
                     </p>
                   </div>
 
@@ -187,7 +190,9 @@ export default function OrganizerDashboardPage() {
                     </h3>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center pb-4 border-b border-white/10">
-                        <p className="text-white/60 font-medium">Total Received:</p>
+                        <p className="text-white/60 font-medium">
+                          Total Received:
+                        </p>
                         <p className="text-lg font-black text-white">
                           {formatCurrency(earnings.totalPaidOut)}
                         </p>
@@ -195,9 +200,13 @@ export default function OrganizerDashboardPage() {
                       {earnings.lastPayoutDate && (
                         <>
                           <div className="flex justify-between items-center pb-4 border-b border-white/10">
-                            <p className="text-white/60 font-medium">Last Payout:</p>
+                            <p className="text-white/60 font-medium">
+                              Last Payout:
+                            </p>
                             <p className="text-sm text-white">
-                              {new Date(earnings.lastPayoutDate).toLocaleDateString("en-US", {
+                              {new Date(
+                                earnings.lastPayoutDate,
+                              ).toLocaleDateString("en-US", {
                                 year: "numeric",
                                 month: "long",
                                 day: "numeric",
@@ -205,7 +214,9 @@ export default function OrganizerDashboardPage() {
                             </p>
                           </div>
                           <div className="flex justify-between items-center">
-                            <p className="text-white/60 font-medium">Last Amount:</p>
+                            <p className="text-white/60 font-medium">
+                              Last Amount:
+                            </p>
                             <p className="text-lg font-black text-success">
                               {formatCurrency(earnings.lastPayoutAmount)}
                             </p>
@@ -213,7 +224,9 @@ export default function OrganizerDashboardPage() {
                         </>
                       )}
                       {!earnings.lastPayoutDate && (
-                        <p className="text-white/40 text-sm italic">No payouts received yet</p>
+                        <p className="text-white/40 text-sm italic">
+                          No payouts received yet
+                        </p>
                       )}
                     </div>
                   </div>
@@ -228,13 +241,17 @@ export default function OrganizerDashboardPage() {
                     </h3>
                     <div className="space-y-4">
                       <div className="flex justify-between items-center pb-4 border-b border-accent/20">
-                        <p className="text-white/60 font-medium">Gross Revenue:</p>
+                        <p className="text-white/60 font-medium">
+                          Gross Revenue:
+                        </p>
                         <p className="text-lg font-black text-white">
                           {formatCurrency(earnings.totalRevenue)}
                         </p>
                       </div>
                       <div className="flex justify-between items-center pb-4 border-b border-accent/20">
-                        <p className="text-white/60 font-medium">Platform Fee (-10%):</p>
+                        <p className="text-white/60 font-medium">
+                          Platform Fee (-10%):
+                        </p>
                         <p className="text-sm text-danger">
                           -{formatCurrency(earnings.adminCommission)}
                         </p>
@@ -291,7 +308,8 @@ export default function OrganizerDashboardPage() {
                       ℹ️ How It Works
                     </p>
                     <p className="text-[10px] text-white/60 leading-relaxed">
-                      The admin takes a 10% platform fee. You receive 90%. Once approved, funds are transferred to your bank account.
+                      The admin takes a 10% platform fee. You receive 90%. Once
+                      approved, funds are transferred to your bank account.
                     </p>
                   </div>
                 </div>

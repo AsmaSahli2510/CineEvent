@@ -95,11 +95,11 @@ export default function MovieRecommendationChat({ isOpen, onClose }) {
       {/* Blurry Background Overlay */}
       <div
         onClick={onClose}
-        className="fixed inset-0 z-30 bg-black/20 backdrop-blur-sm transition-opacity duration-300"
+        className="fixed inset-0 z-30 bg-black/20 transition-opacity duration-300"
       />
 
       {/* Chat Panel */}
-      <div className="fixed bottom-6 right-6 z-40 w-96 max-w-[calc(100vw-3rem)] bg-charcoal/95 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-5">
+      <div className="fixed bottom-6 right-6 z-40 w-96 max-w-[calc(100vw-3rem)] bg-charcoal/30 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-5">
         {/* Header - Creative Design */}
         <div className="px-5 py-4 border-b border-white/10 bg-gradient-to-r from-accent/20 via-transparent to-accent/10">
           <div className="flex items-center justify-between">
@@ -123,7 +123,7 @@ export default function MovieRecommendationChat({ isOpen, onClose }) {
         </div>
 
         {/* Messages Container */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-4 h-96">
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-4 max-h-96">
           {messages.map((msg) => (
             <div
               key={msg.id}

@@ -133,7 +133,9 @@ export default function RevenueTrackingPage() {
             {/* Loading State */}
             {loading && (
               <div className="text-center py-16">
-                <div className="loading-spinner" style={{ margin: "0 auto" }}></div>
+                <div
+                  className="loading-spinner"
+                  style={{ margin: "0 auto" }}></div>
                 <p className="text-white/60 mt-4">Loading revenue data...</p>
               </div>
             )}
@@ -210,7 +212,9 @@ export default function RevenueTrackingPage() {
                     {/* Revenue Breakdown */}
                     <div className="bg-white/5 p-6 rounded-xl border border-white/10">
                       <div className="flex justify-between items-center mb-4">
-                        <span className="text-white/60 font-medium">Gross Revenue:</span>
+                        <span className="text-white/60 font-medium">
+                          Gross Revenue:
+                        </span>
                         <span className="text-lg font-black text-white">
                           {formatCurrency(earnings.totalRevenue)}
                         </span>
@@ -272,10 +276,16 @@ export default function RevenueTrackingPage() {
                     {/* Calculation Explanation */}
                     <div className="bg-primary/5 p-4 rounded-lg border border-primary/20">
                       <p className="text-sm text-white/60 leading-relaxed">
-                        <span className="font-bold">How it works:</span> Your {earnings.reservationCount} confirmed reservations generated{" "}
-                        <span className="font-bold text-white">{formatCurrency(earnings.totalRevenue)}</span> in total
-                        revenue. The platform takes 10% ({formatCurrency(earnings.adminCommission)}) as a service fee,
-                        leaving you with {formatCurrency(earnings.organizerWillGet)} (90%).
+                        <span className="font-bold">How it works:</span> Your{" "}
+                        {earnings.reservationCount} confirmed reservations
+                        generated{" "}
+                        <span className="font-bold text-white">
+                          {formatCurrency(earnings.totalRevenue)}
+                        </span>{" "}
+                        in total revenue. The platform takes 10% (
+                        {formatCurrency(earnings.adminCommission)}) as a service
+                        fee, leaving you with{" "}
+                        {formatCurrency(earnings.organizerWillGet)} (90%).
                       </p>
                     </div>
                   </div>
@@ -291,20 +301,24 @@ export default function RevenueTrackingPage() {
                   {payouts.length === 0 ? (
                     <div className="bg-white/5 p-8 rounded-2xl border border-white/10 text-center">
                       <p className="text-white/40 font-medium">
-                        No payouts yet. Your first payout will appear here once the admin processes it.
+                        No payouts yet. Your first payout will appear here once
+                        the admin processes it.
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {payouts.map((payout) => (
-                        <div key={payout._id} className="payout-item p-6 rounded-xl">
+                        <div
+                          key={payout._id}
+                          className="payout-item p-6 rounded-xl">
                           <div className="flex items-start justify-between mb-4">
                             <div>
                               <div className="flex items-center gap-3 mb-2">
                                 <p className="font-bold text-white">
                                   {payout.transactionReference}
                                 </p>
-                                <span className={`status-badge status-${payout.status}`}>
+                                <span
+                                  className={`status-badge status-${payout.status}`}>
                                   <span className="material-symbols-outlined text-sm">
                                     {payout.status === "completed"
                                       ? "check_circle"
@@ -358,7 +372,9 @@ export default function RevenueTrackingPage() {
                               </p>
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <p className="text-xs text-white/60">Account Holder:</p>
+                                  <p className="text-xs text-white/60">
+                                    Account Holder:
+                                  </p>
                                   <p className="text-sm font-bold text-white">
                                     {payout.bankAccountDetails.accountHolder}
                                   </p>
@@ -366,7 +382,14 @@ export default function RevenueTrackingPage() {
                                 <div>
                                   <p className="text-xs text-white/60">IBAN:</p>
                                   <p className="text-sm font-bold text-white font-mono">
-                                    {payout.bankAccountDetails.iban?.substring(0, 4)}...{payout.bankAccountDetails.iban?.substring(-4)}
+                                    {payout.bankAccountDetails.iban?.substring(
+                                      0,
+                                      4,
+                                    )}
+                                    ...
+                                    {payout.bankAccountDetails.iban?.substring(
+                                      -4,
+                                    )}
                                   </p>
                                 </div>
                               </div>
@@ -375,8 +398,12 @@ export default function RevenueTrackingPage() {
 
                           {payout.failureReason && (
                             <div className="mt-4 p-3 bg-danger/10 border border-danger/20 rounded-lg">
-                              <p className="text-xs font-bold text-danger">Failure Reason:</p>
-                              <p className="text-sm text-danger/80">{payout.failureReason}</p>
+                              <p className="text-xs font-bold text-danger">
+                                Failure Reason:
+                              </p>
+                              <p className="text-sm text-danger/80">
+                                {payout.failureReason}
+                              </p>
                             </div>
                           )}
                         </div>
@@ -404,7 +431,7 @@ export default function RevenueTrackingPage() {
 
                         {Array.from(
                           { length: Math.min(5, pagination.pages) },
-                          (_, i) => i + 1
+                          (_, i) => i + 1,
                         ).map((p) => (
                           <button
                             key={p}
@@ -419,7 +446,9 @@ export default function RevenueTrackingPage() {
                         ))}
 
                         <button
-                          onClick={() => setPage(Math.min(pagination.pages, page + 1))}
+                          onClick={() =>
+                            setPage(Math.min(pagination.pages, page + 1))
+                          }
                           disabled={page === pagination.pages}
                           className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                           <span className="material-symbols-outlined text-sm">
@@ -434,9 +463,12 @@ export default function RevenueTrackingPage() {
                 {/* Info Section */}
                 <div className="bg-primary/10 p-6 rounded-2xl border border-primary/20">
                   <p className="text-sm text-white/70 leading-relaxed">
-                    <span className="font-bold text-primary">💡 Important:</span> Your balance shows
-                    confirmed and paid reservations. Admin will process your payout within 5-7 business
-                    days. You'll receive 90% of total revenue after platform fees.
+                    <span className="font-bold text-primary">
+                      💡 Important:
+                    </span>{" "}
+                    Your balance shows confirmed and paid reservations. Admin
+                    will process your payout within 5-7 business days. You'll
+                    receive 90% of total revenue after platform fees.
                   </p>
                 </div>
               </>

@@ -4,6 +4,8 @@ import { useSelector } from "react-redux";
 import { getEventById } from "../../api/eventApi";
 import { toggleWishlist, isEventInWishlist } from "../../api/wishlistApi";
 import { useAuth } from "../../context/AuthContext";
+import SocialShareButtons from "../../components/SocialShareButtons";
+
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -585,6 +587,8 @@ export default function EventDetailsPage() {
                 </div>
               </div>
             )}
+
+          
           </div>
 
           <div className="space-y-4">
@@ -651,6 +655,15 @@ export default function EventDetailsPage() {
                 </div>
               </div>
             </div>
+
+            <SocialShareButtons
+              eventTitle={event.title}
+              eventUrl={window.location.href}
+              eventImage={event.image}
+              eventDate={event.fullDate}
+              eventVenue={event.fullLocation}
+              eventPrice={event.fullPrice}
+            />
           </div>
         </div>
       </section>

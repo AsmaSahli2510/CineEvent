@@ -47,7 +47,7 @@ export const getMyPayoutHistory = async (page = 1, limit = 20) => {
     {
       method: "GET",
       headers: getAuthHeader(),
-    }
+    },
   );
 
   const data = await parseJson(response);
